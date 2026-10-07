@@ -1,0 +1,2454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#05060f">
+<title>超级马力欧银河 · 大电影小游戏</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%;
+    background: #05060f;
+    color: #e8f0ff;
+    font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
+    -webkit-user-select: none; user-select: none;
+  }
+  body { position: fixed; inset: 0; }
+  /* 舞台铺满可视区，实际画布尺寸由 JS 按屏幕比例计算（纵向固定 17 行，横向视野随比例伸缩） */
+  #stage {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #05060f;
+    touch-action: none;
+  }
+  canvas { display: block; touch-action: none; border-radius: 4px; }
+
+  /* 全屏按钮（右上角，不挡画面） */
+  #fsBtn {
+    position: absolute; top: 10px; right: 12px; z-index: 30;
+    padding: 7px 13px; border-radius: 9px; cursor: pointer;
+    background: rgba(18,28,62,.72); border: 1px solid rgba(120,170,255,.32);
+    color: #cfe0ff; font-size: 12px; font-weight: 700; letter-spacing: 1px;
+  }
+  #fsBtn:active { background: rgba(60,90,170,.8); }
+
+  .panel {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 18px; text-align: center;
+    background: rgba(4,7,22,.86);
+    backdrop-filter: blur(6px);
+    padding: 24px;
+    overflow-y: auto;                 /* 矮屏（如手机横屏）内容过高时可滚动，绝不裁切 */
+  }
+  /* 内容少时上下留白居中；内容多时正常滚动（flex 居中的经典溢出解法） */
+  .panel > * { flex-shrink: 0; }
+  .panel > *:first-child { margin-top: auto; }
+  .panel > *:last-child { margin-bottom: auto; }
+  .panel.hidden { display: none; }
+  .title {
+    font-size: clamp(24px, 4.4vw, 52px); font-weight: 900; letter-spacing: 2px;
+    background: linear-gradient(180deg, #fff 0%, #ffe07a 45%, #ff9d2e 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 30px rgba(255,190,80,.35);
+  }
+  .subtitle { font-size: clamp(12px, 1.6vw, 17px); color: #9fc0ff; letter-spacing: 3px; }
+  .card {
+    background: rgba(20,32,70,.72); border: 1px solid rgba(120,170,255,.28);
+    border-radius: 14px; padding: 14px 22px; font-size: clamp(11px, 1.35vw, 14px);
+    line-height: 1.9; color: #cfe0ff; max-width: 640px;
+  }
+  .card b { color: #ffd86b; }
+  .key {
+    display: inline-block; min-width: 26px; padding: 1px 7px; margin: 0 2px;
+    border: 1px solid #7fa8ff; border-bottom-width: 3px; border-radius: 5px;
+    background: #1b2a55; color: #dbe8ff; font-size: .9em; font-weight: 700;
+  }
+  .btn {
+    cursor: pointer; border: none; border-radius: 999px;
+    padding: 13px 40px; font-size: clamp(14px, 1.8vw, 19px); font-weight: 800; letter-spacing: 2px;
+    background: linear-gradient(180deg, #ffd45e, #f5931e);
+    color: #40230a; box-shadow: 0 6px 0 #a85d09, 0 10px 22px rgba(0,0,0,.45);
+    transition: transform .08s, box-shadow .08s;
+  }
+  .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #a85d09, 0 6px 14px rgba(0,0,0,.45); }
+  .btn.alt { background: linear-gradient(180deg, #8fb8ff, #4d7ff0); color: #08122e; box-shadow: 0 6px 0 #2a4ba8, 0 10px 22px rgba(0,0,0,.45); }
+  .stat { font-size: clamp(13px, 1.8vw, 18px); color: #ffe9a8; }
+  .stat span { color: #fff; font-weight: 800; }
+
+  /* ── 结算画面 · 双角色庆祝动画舞台 ── */
+  #ovCast { display: flex; justify-content: center; width: 100%; }
+  #ovCast.hidden { display: none; }
+  #ovCast canvas { max-width: min(90vw, 470px); max-height: 30vh; }
+
+  /* 矮屏（手机横屏 / 小笔记本）：整体收紧，保证结算页与角色舞台同屏可见 */
+  @media (max-height: 680px) {
+    .panel { gap: 8px; padding: 10px 16px; }
+    .panel .title { font-size: clamp(17px, 3vw, 26px); letter-spacing: 1px; }
+    .panel .subtitle { font-size: 11px; letter-spacing: 2px; }
+    .panel .card { padding: 7px 14px; line-height: 1.55; font-size: 11px; }
+    .panel .btn { padding: 9px 26px; font-size: 14px; box-shadow: 0 4px 0 #a85d09, 0 6px 14px rgba(0,0,0,.45); }
+    #ovCast canvas { max-height: 22vh; }
+  }
+
+  #testPanel {
+    position: absolute; inset: 0; overflow: auto; padding: 18px;
+    background: #05070f; font-family: Consolas, "Courier New", monospace; font-size: 12px;
+    text-align: left; line-height: 1.65; z-index: 50;
+  }
+  #testPanel.hidden { display: none; }
+  #testPanel h2 { color: #ffd86b; font-size: 16px; margin-bottom: 8px; }
+  .tp { color: #6ee787; } .tf { color: #ff7b72; font-weight: 700; } .ti { color: #8ab4ff; }
+
+  #touch { position: absolute; inset: 0; display: none; pointer-events: none; z-index: 20; }
+  .tbtn {
+    position: absolute; bottom: max(14px, env(safe-area-inset-bottom));
+    width: 62px; height: 62px; border-radius: 50%;
+    background: rgba(120,170,255,.16); border: 2px solid rgba(150,190,255,.45);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 800; color: #d8e6ff; pointer-events: auto;
+    backdrop-filter: blur(3px);
+  }
+  .tbtn:active { background: rgba(120,170,255,.45); }
+  #tL { left: 14px; } #tR { left: 88px; }
+  #tJ { right: 14px; } #tF { right: 88px; } #tS { right: 162px; }
+  /* 手机横屏：高度紧张，按钮缩小 */
+  @media (max-height: 460px) {
+    .tbtn { width: 54px; height: 54px; font-size: 20px; }
+    #tR { left: 78px; } #tF { right: 78px; } #tS { right: 144px; }
+  }
+
+  /* 竖屏提示 */
+  #rotate {
+    position: absolute; inset: 0; z-index: 40;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+    background: #05070f; text-align: center; padding: 24px;
+  }
+  #rotate.hidden { display: none; }
+  #rotate .ri {
+    width: 74px; height: 118px; border: 4px solid #8fb8ff; border-radius: 14px;
+    animation: rot 2s ease-in-out infinite;
+  }
+  @keyframes rot {
+    0%, 35% { transform: rotate(0deg); }
+    65%, 100% { transform: rotate(-90deg); }
+  }
+  #rotate .rt { font-size: 19px; font-weight: 800; color: #ffd86b; }
+  #rotate .rs { font-size: 14px; color: #9fc0ff; line-height: 1.8; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv" width="960" height="544"></canvas>
+
+  <button id="fsBtn">⛶ 全屏</button>
+
+  <div id="rotate" class="hidden">
+    <div class="ri"></div>
+    <div class="rt">请横屏游玩</div>
+    <div class="rs">把手机转过来，视野会宽很多<br>横屏后本提示会自动消失</div>
+    <button class="btn alt" id="rotBtn">仍要竖屏游玩</button>
+  </div>
+
+  <div id="overlay" class="panel">
+    <div class="subtitle">SUPER MARIO GALAXY · MOVIE MINI GAME</div>
+    <div class="title">超级马力欧银河</div>
+    <div class="card" id="ovText"></div>
+    <div id="ovCast" class="hidden"><canvas id="ovCv" width="480" height="280"></canvas></div>
+    <button class="btn" id="ovBtn">开始冒险</button>
+  </div>
+
+  <div id="testPanel" class="hidden"><h2>自检测试中…</h2><div id="testOut"></div></div>
+
+  <div id="touch">
+    <div class="tbtn" id="tL">◀</div>
+    <div class="tbtn" id="tR">▶</div>
+    <div class="tbtn" id="tS">✦</div>
+    <div class="tbtn" id="tF">⇅</div>
+    <div class="tbtn" id="tJ">▲</div>
+  </div>
+</div>
+
+<script>
+(function () {
+'use strict';
+
+/* =========================================================
+   超级马力欧银河 · 大电影小游戏
+   —— 重力翻转平台跳跃 / 收集星星 / 踩踏敌人 / 移动平台
+   ========================================================= */
+
+// ---------------- 常量 ----------------
+const TILE = 32, ROWS = 17;
+// 纵向固定 17 行（整个世界高度必须可见）；横向视野随屏幕宽高比伸缩
+let   VIEW_W = 960;
+const VIEW_H = ROWS * TILE; // 544
+const STEP = 1 / 60;
+let baseScale = 1;          // 逻辑坐标 → 画布物理像素的缩放（含 dpr）
+
+const GRAV       = 0.60;   // 重力加速度
+const MAX_FALL   = 13.5;   // 最大下落速度
+const JUMP_V     = 13.2;   // 起跳速度（约 4.5 格高）
+const RUN_ACC    = 0.72;
+const RUN_MAX    = 4.7;
+const FRIC_GND   = 0.80;
+const FRIC_AIR   = 0.93;
+const JUMP_CUT   = 0.42;   // 松开跳跃键的速度衰减
+const COYOTE     = 7;
+const BUFFER     = 7;
+const FLIP_CD    = 26;     // 重力翻转冷却帧
+const SPIN_TIME  = 26;     // 旋转攻击持续帧
+const INVULN     = 90;     // 复活无敌帧
+const DEATH_TIME = 74;     // 死亡动画帧
+
+const SOLID = new Set(['#', '=', 'F']);
+
+// ---------------- 关卡构建 ----------------
+function buildLevel(name, w, spec) {
+  const g = [];
+  for (let y = 0; y < ROWS; y++) g.push(new Array(w).fill('.'));
+  const put = (x, y, s) => {
+    if (!g[y]) return;
+    for (let i = 0; i < s.length; i++) {
+      const tx = x + i;
+      if (tx >= 0 && tx < w) g[y][tx] = s[i];
+    }
+  };
+  const putV = (x, y, s) => {
+    for (let i = 0; i < s.length; i++) {
+      if (g[y + i] && x >= 0 && x < w) g[y + i][x] = s[i];
+    }
+  };
+  // 外壳：顶部岩层、底部地面、左右边墙
+  for (let x = 0; x < w; x++) { g[0][x] = '#'; g[ROWS - 1][x] = '#'; }
+  for (let y = 0; y < ROWS; y++) { g[y][0] = '#'; g[y][w - 1] = '#'; }
+  spec(put, putV);
+  return { name, w, rows: g.map(r => r.join('')) };
+}
+
+const LEVELS = [
+  buildLevel('第一关 · 冰天雪地', 64, (set, setV) => {
+    set(3, 15, 'P');
+    set(18, 16, '...'); set(41, 16, '...');           // 地面深坑
+    set(7, 13, '====='); set(14, 11, '====');
+    set(24, 13, '======');     set(20, 8, '====='); set(40, 8, '====');
+    set(51, 12, '===');                                // 原 x47-51：横在 F(x44) 的落体漂移带上；右端仍需与 row9 栈道错开（否则跳上去撞底）
+    set(54, 9, '=======');
+    set(28, 1, '===================');                  // 天花板栈道 x28-46
+    set(44, 1, 'F');                                    // 天花板重力板（翻回地面）
+    set(30, 2, '*.*.*.*.*.*.*');                        // 天花板星星币
+    set(30, 16, 'FF');                                  // 地面重力板
+    set(36, 15, '^^');                                 // x52 尖刺撤除：无论移到 x56（堵死通往力量星 x58 的路）还是留在 x52（被 row12 平台压住跳不过）都无解
+    set(12, 15, 'G'); set(26, 15, 'G'); set(48, 15, 'G'); set(61, 15, 'G');   // x57→x61：原位置紧贴力量星 x58，会把玩家撞离星星
+    set(8, 12, '*.*.*'); set(15, 10, '***'); set(25, 12, '****');
+    set(21, 7, '***'); set(40, 7, '**'); set(48, 11, '***'); set(55, 8, '***');
+    set(18, 12, 'M'); set(36, 11, 'V');                 // 移动平台（避开天花板重力板 x44 的落体竖井）
+    set(58, 15, 'S');                                   // 力量星（主路径地面：高空悬置需爬浮台链，普通玩家够不到会卡关）
+    set(20, 1, 'R');                                    // ☆彩蛋：隐藏彩虹星（需翻转重力贴 row0 天花板）
+  }),
+  buildLevel('第二关 · 火炉山', 76, (set, setV) => {
+    set(3, 15, 'P');
+    set(14, 16, '...'); set(30, 16, '...'); set(70, 16, '..');
+    set(8, 12, '===='); set(18, 13, '====='); set(23, 10, '====');
+    set(27, 8, '===='); set(34, 13, '======'); set(50, 12, '=====');
+    set(53, 13, '==='); set(66, 12, '==='); set(68, 9, '=====');
+    setV(46, 3, '#############');                       // 阻断高墙 → 必须走天花板
+    set(42, 16, 'FFFF');                                // 地面重力板（加宽到 4 格：2 格宽用满跳会被直接飞过 → 撞 x46 高墙卡死）
+    set(40, 1, '=====================');                 // 天花板栈道 x40-60
+    set(58, 1, 'F');
+    set(45, 2, '*.*.*.*.*.*.*.*');                      // 天花板星星币（原 x52 尖刺已改为星星币）
+    set(20, 15, '^^');                                  // x36-38 尖刺撤除：上方 row13 平台(x34-39)正压起跳弧线，跳过必撞
+    set(10, 15, 'G'); set(25, 15, 'G'); set(34, 15, 'G'); set(54, 15, 'G'); set(70, 15, 'G');
+    set(9, 11, '***'); set(19, 12, '*.*.*'); set(24, 9, '***'); set(35, 12, '****');
+    set(51, 11, '***'); set(57, 12, '***'); set(69, 8, '***');
+    set(15, 11, 'M'); set(31, 11, 'V'); set(70, 10, 'M');   // M 原在 x65：扫掠范围压住 F(x58) 的落体轨迹，玩家会被架在半空
+    set(74, 15, 'S');                                   // 力量星（主路径地面：必须走完天花板航线越过 x46 高墙才能抵达）
+    set(35, 1, 'R');                                    // ☆彩蛋：隐藏彩虹星
+  }),
+  buildLevel('第三关 · 热带雨林', 92, (set, setV) => {
+    set(3, 15, 'P');
+    set(12, 16, '....'); set(23, 16, '.....'); set(40, 16, '...');   // 原 x22-27 宽 6 格：超出满跳 6.4 格的可靠余量，收窄到 5 格
+    set(58, 16, '...'); set(74, 16, '...');
+    set(8, 12, '==='); set(17, 9, '===='); set(20, 13, '===');   // x17 平台由 row10 抬到 row9：row10 正好卡在跳跃顶点(顶部 row10.6)，玩家跳过 x18 尖刺必撞
+    set(29, 13, '====='); set(35, 9, '===='); set(43, 12, '====');
+    set(52, 12, '====='); set(68, 12, '====='); set(72, 9, '===='); set(79, 13, '=====');   // x65→x68：原位置横在 F(x61) 的落体轨迹上
+    setV(50, 3, '#############');                       // 阻断高墙
+    set(47, 16, 'FFF');                                 // 地面重力板 ①（3 格宽：2 格宽用满跳会被飞过 → 撞 x50 高墙卡死）
+    set(45, 1, '==================');                    // 天花板栈道 x45-62
+    set(61, 1, 'F');
+    set(47, 2, '*.*.*.*.*.*.*.*');
+    set(82, 1, '=========');                            // 终点天花板栈道 x82-90
+    set(84, 16, 'FF');                                  // 地面重力板 ②
+    set(84, 2, '*.*');
+    set(18, 15, '^^'); set(31, 15, '^^'); set(42, 15, '^');
+    set(77, 15, '^^');                                   // 原 x61 尖刺（压 F 板落体带）与 x70 尖刺（被 row12 平台压住）均已撤除
+    set(9, 15, 'G'); set(16, 15, 'G'); set(30, 15, 'G'); set(44, 15, 'G');
+    set(53, 15, 'G'); set(67, 15, 'G'); set(80, 15, 'G');
+    set(9, 11, '***'); set(18, 9, '***'); set(21, 12, '*.*'); set(30, 12, '****');
+    set(36, 8, '***'); set(44, 11, '**'); set(66, 11, '***'); set(73, 8, '***'); set(80, 12, '***');
+    set(13, 11, 'M'); set(23, 12, 'M'); set(26, 10, 'V');
+    set(41, 11, 'V');     set(54, 11, 'M'); set(75, 11, 'M');   // x52→x54：原扫掠范围同时压住重力板①(x47-49)上升走廊和 F(x61) 落体竖井
+    set(90, 2, 'S');                                    // 最终力量星（天花板栈道东端，右侧有边界墙兜底）
+    set(70, 1, 'R');                                    // ☆彩蛋：隐藏彩虹星
+  })
+  ,
+  // ===== 第四关：更长、更多深坑，引入垂直移动平台接力 =====
+  buildLevel('第四关 · 沙漠古城', 104, (set, setV) => {
+    set(3, 15, 'P');
+    set(10, 16, '....'); set(20, 16, '.....'); set(33, 16, '....');
+    set(47, 16, '.....'); set(62, 16, '....'); set(78, 16, '.....');
+    set(92, 16, '....');
+    set(15, 12, '====='); set(26, 13, '====');           // 原 x7-10 的 row13 平台：正压深坑 x10-13 的起跳弧线，把安全起跳窗口压到只剩 2 格，撤除
+    set(25, 11, '====='); set(36, 12, '==='); set(47, 13, '====');   // x44→x47：原位置横在 F(x40) 的落体轨迹上
+    set(53, 12, '======'); set(56, 10, '===='); set(67, 13, '=====');
+    set(69, 11, '===='); set(74, 13, '===='); set(84, 12, '=====');
+    set(86, 10, '===='); set(97, 12, '=====');
+    set(30, 16, 'FF');                                 // 地面重力板
+    set(28, 1, '==============');                      // 天花板栈道 x28-41
+    set(40, 1, 'F');                                   // 翻回地面
+    set(30, 2, '*.*.*.*.*.*.*.*');                     // 天花板币（原 x35 尖刺已改为星星币）
+    set(16, 15, '^^'); set(25, 15, '^'); set(52, 15, '^^^');   // x39 的尖刺并入 x52：原位置正压在天花板重力板 F(x40) 的落体漂移带上
+    set(60, 15, '^^'); set(73, 15, '^'); set(83, 15, '^^');   // x96 尖刺撤除：上方 row12 平台(x97-101)正压起跳弧线，且紧邻终点力量星
+    set(6, 15, 'G'); set(18, 15, 'G'); set(27, 15, 'G'); set(39, 15, 'G');
+    set(54, 15, 'G'); set(68, 15, 'G'); set(85, 15, 'G'); set(99, 15, 'G');
+    set(8, 12, '***'); set(16, 11, '***'); set(29, 10, '***'); set(39, 11, '***');
+    set(45, 12, '***'); set(54, 11, '***'); set(57, 9, '***'); set(68, 12, '***');
+    set(70, 10, '***'); set(75, 12, '***'); set(85, 11, '***'); set(87, 9, '***');
+    set(98, 11, '***');
+    set(11, 12, 'M'); set(21, 12, 'V'); set(63, 9, 'M');   // 原 x48 的竖直平台：扫掠范围横在深坑 x47-51 的起跳弧线上（x43-46 起跳必撞）
+    set(63, 12, 'M');   // 原 x79 竖移平台、x93 横移平台撤除：二者扫掠范围分别为「坑 x78-82 起跳弧线」和「坑 x92-95 起跳弧线」，纯阻碍（两坑实测可纯跳过）
+    set(100, 15, 'S');
+    set(60, 1, 'R');                                   // ☆彩蛋：隐藏彩虹星
+  }),
+  // ===== 第五关：双段重力翻转 + 6 格宽深坑，靠移动平台接力 =====
+  buildLevel('第五关 · 幽蓝深海', 118, (set, setV) => {
+    set(3, 15, 'P');
+    set(9, 16, '....'); set(18, 16, '.....'); set(31, 16, '.....');
+    set(44, 16, '......'); set(60, 16, '....'); set(72, 16, '.....');
+    set(85, 16, '....'); set(101, 16, '...'); set(110, 16, '....');
+    set(1, 13, '==='); set(14, 12, '====='); set(22, 13, '====');   // x6→x1：原位置压住深坑 x9-12 的起跳弧线（只剩 2 个安全起跳点）
+    set(33, 11, '====='); set(34, 12, '===='); set(52, 10, '====');   // x40→x52：原位置横在 F(x38) 的落体轨迹上
+    set(51, 13, '====='); set(57, 12, '===='); set(65, 13, '=====');
+    set(67, 11, '===='); set(70, 12, '====='); set(84, 10, '====');
+    set(87, 13, '==='); set(109, 12, '===='); set(109, 10, '====');
+    set(115, 13, '=====');
+    set(27, 16, 'FF'); set(24, 1, '================='); set(38, 1, 'F');
+    set(26, 2, '*.*.*.*.*.*.*.*');
+    set(80, 16, 'FF'); set(78, 1, '=================='); set(93, 1, 'F');
+    set(80, 2, '*.*.*.*.*.*.*.*');
+    set(104, 16, 'FFFFF'); set(102, 1, '==================');   // 地面重力板 ③ 加宽到 5 格：必须覆盖「跳过 x101-103 深坑」的落点，否则上不了天花板拿不到终点星
+    set(105, 2, '*.*.*');
+    set(15, 15, '^^'); set(25, 15, '^'); set(52, 15, '^^'); set(62, 15, '^^');   // x38→x62：原位置正压在天花板重力板 F(x38) 的落体漂移带上
+    set(66, 15, '^'); set(69, 15, '^'); set(78, 15, '^^'); set(102, 15, '^^');   // x91→x102：原位置正压在 F(x93) 的落体漂移带上
+    set(112, 15, '^'); set(115, 15, '^');               // x107 的尖刺移到 x112：原位置压在重力板③的上升走廊里，玩家踩板起跳必受伤
+    set(5, 15, 'G'); set(16, 15, 'G'); set(26, 15, 'G'); set(40, 15, 'G');
+    set(54, 15, 'G'); set(67, 15, 'G'); set(82, 15, 'G'); set(95, 15, 'G');
+    set(108, 15, 'G');
+    set(7, 12, '***'); set(15, 11, '***'); set(25, 12, '***'); set(27, 10, '***');
+    set(38, 11, '***'); set(41, 9, '***'); set(52, 12, '***'); set(58, 11, '***');
+    set(66, 12, '***'); set(68, 10, '***'); set(79, 11, '***'); set(81, 9, '***');
+    set(91, 12, '***'); set(105, 11, '***'); set(107, 9, '***'); set(116, 12, '***');
+    set(10, 12, 'M'); set(19, 12, 'V'); set(48, 12, 'M'); set(52, 12, 'V');   // x47→x48：扫掠左界刚好压到 F(x38) 的落体漂移带 x44
+    set(61, 12, 'M'); set(73, 12, 'V'); set(86, 12, 'M'); set(82, 12, 'V');   // x99→x82：原位置(±76.8px 竖移)扫过 F(x93) 的落体竖井
+    set(113, 12, 'M');
+    set(117, 2, 'S');                                  // 终点力量星（天花板上）
+    set(55, 1, 'R');                                   // ☆彩蛋：隐藏彩虹星
+  }),
+  // ===== 第六关（最终）：三段重力翻转 + 高墙阻断 + 最密集敌人 =====
+  buildLevel('第六关 · 雷暴云海', 136, (set, setV) => {
+    set(3, 15, 'P');
+    // ── 地面深坑（可达区）：一律 4 格宽，坑前留 ≥7 格助跑、坑后留 ≥6 格落地点 ──
+    set(8, 16, '....'); set(16, 16, '....'); set(27, 16, '....'); set(40, 16, '....');
+    set(96, 16, '....');
+    // ── 装饰区深坑（被高墙隔断，玩家在地面不会经过，只做视觉纵深）──
+    set(48, 16, '....');
+    set(76, 16, '....'); set(82, 16, '....');
+    set(116, 16, '....'); set(122, 16, '.....'); set(128, 16, '......');
+    // ── 高空浮台（row4~6）：地面满跳最高只到 row10.6，绝不会顶头。
+    //     但必须避开两条通道：①上升通道 46-52 / 72-78 / 112-118
+    //                       ②天花板翻回地面的自由落体通道 58-66 / 89-95
+    set(9, 5, '===='); set(18, 6, '====='); set(28, 5, '====');
+    set(35, 6, '====='); set(41, 4, '=====');
+    set(53, 5, '==='); set(67, 6, '====');
+    set(79, 5, '===='); set(85, 6, '====');
+    set(97, 5, '====='); set(105, 6, '====');
+    set(120, 5, '===='); set(128, 6, '===');
+    setV(56, 3, '#############');                      // 高墙①：阻断地面 → 必须走天花板
+    setV(88, 3, '#############');                      // 高墙②
+    // ── 三段“地面重力板 → 升到天花板 → 天花板重力板 → 落回地面”主航线 ──
+    //    上升走廊必须严格留空（26 条 lane 全部清空），天花板步道只放币、不放尖刺：
+    //    倒置重力下“跳跃”方向是朝下的，踩空一次就会掉进深坑，属于不可预期死亡。
+    set(46, 16, 'FF'); set(44, 1, '=================='); set(59, 1, 'F');
+    set(46, 2, '*.*.*.*.*.*');
+    set(72, 16, 'FF'); set(70, 1, '===================='); set(89, 1, 'F');
+    set(72, 2, '*.*.*.*.*.*.*.*.*');
+    set(112, 16, 'FF'); set(110, 1, '==================');
+    set(113, 2, '*.*.*');
+    // ── 尖刺：全部在地面，必须同时避开两类漂移带 ──
+    //    ①「天花板落体漂移带」：踩天花板 F(59/89) 后自由落体约 5.7 格（落点约 65 / 95）
+    //    ②「重力板上升漂移带」← 第二类是致命死局：踩上 FF 板(72-73 / 112-113)后玩家
+    //      仍以 4.7px/帧向右漂移，而 vy 从 -0.6 起步、需 10 帧才升起 1 格，
+    //      即右移约 1.5 格。原设置把尖刺放在板右缘 1 格处(74 / 114)，
+    //      玩家只要「跳过窄坑后落在板右半边」就必定翻转后被尖刺扎死（推演与实测均复现）。
+    //      ⇒ 规则：任何重力板右缘 3 格内不放尖刺，上升漂移带必须完全净空。
+    set(67, 15, '^^^'); set(105, 15, '^^');
+    set(80, 15, '^^');
+    set(134, 15, '^^');
+    // ── 敌人：密度最高（本关招牌），但必须站在实地上 ──
+    set(4, 15, 'G'); set(6, 15, 'G'); set(12, 15, 'G'); set(54, 15, 'G');   // x14→x54：原位置紧贴深坑 x16-19（踩完敌人即掉坑）
+    set(23, 15, 'G'); set(25, 15, 'G');
+    set(35, 15, 'G'); set(37, 15, 'G'); set(39, 15, 'G');
+    set(52, 15, 'G'); set(55, 15, 'G'); set(58, 15, 'G');
+    set(70, 15, 'G'); set(86, 15, 'G'); set(87, 15, 'G');
+    set(94, 15, 'G'); set(93, 15, 'G');
+    set(103, 15, 'G'); set(104, 15, 'G'); set(108, 15, 'G'); set(110, 15, 'G');
+    // ── 移动平台：一律搬离上升走廊 / 落体竖井 / 天花板步道 ──
+    set(20, 7, 'V'); set(100, 7, 'M'); set(126, 7, 'V'); set(30, 9, 'M');
+    // ── 星星币：高空路线奖励 ──
+    set(9, 4, '***'); set(19, 5, '***'); set(29, 4, '***'); set(36, 5, '***');
+    set(42, 3, '***'); set(54, 4, '***'); set(68, 5, '***');
+    set(80, 4, '***'); set(86, 5, '***'); set(98, 4, '***'); set(106, 5, '***');
+    set(121, 4, '***'); set(129, 5, '***');
+    set(125, 2, 'S');                                  // 最终力量星（天花板上）
+    set(100, 1, 'R');                                  // ☆彩蛋：隐藏彩虹星
+  })
+];
+// 每关限时（秒），随关卡长度递增
+const LEVEL_TIME = [180, 210, 260, 300, 340, 400];
+// 彩蛋：每关藏了一颗彩虹星（tile 'R'），这里是全局总数
+const RAINBOW_TOTAL = LEVELS.reduce((n, L) => n + (L.rows.join('').match(/R/g) || []).length, 0);
+
+// ---------------- 画布 / 自适应 ----------------
+const canvas = document.getElementById('cv');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = true;
+
+const stage = document.getElementById('stage');
+const rotTip = document.getElementById('rotate');
+let forcePortrait = false;   // 用户选择“仍要竖屏游玩”
+let lastAspect = 16 / 9;
+
+function resize() {
+  const availW = Math.max(280, stage.clientWidth || window.innerWidth || 960);
+  const availH = Math.max(200, stage.clientHeight || window.innerHeight || 544);
+  const aspect = availW / availH;
+  lastAspect = aspect;
+
+  // 手机横屏（比例很宽）→ 视野变宽，不做无谓黑边；竖屏 → 保底 640 宽
+  VIEW_W = Math.round(Math.max(640, Math.min(1760, VIEW_H * aspect)));
+
+  const scale = Math.min(availW / VIEW_W, availH / VIEW_H);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const cssW = Math.round(VIEW_W * scale), cssH = Math.round(VIEW_H * scale);
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  baseScale = scale * dpr;
+
+  bgCache.length = 0;                 // 背景按新视野宽度重画
+  const portrait = aspect < 1.15;
+  rotTip.classList.toggle('hidden', !(portrait && !forcePortrait));
+  game.hold = portrait && !forcePortrait;
+  if (!game.hold) Audio2.duck(false);
+}
+
+function toggleFullscreen() {
+  const el = stage;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    if (req) { try { req.call(el); } catch (e) {} }
+  } else {
+    const ex = document.exitFullscreen || document.webkitExitFullscreen;
+    if (ex) { try { ex.call(document); } catch (e) {} }
+  }
+}
+
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 260));
+document.addEventListener('fullscreenchange', () => setTimeout(resize, 60));
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => setTimeout(resize, 60));
+}
+// 兜底：容器尺寸变化（移动端地址栏收起、开发者工具停靠等）不一定触发 window.resize
+if (window.ResizeObserver) {
+  new ResizeObserver(() => resize()).observe(document.getElementById('stage'));
+}
+document.getElementById('fsBtn').addEventListener('click', () => { Sfx.unlock(); toggleFullscreen(); });
+document.getElementById('rotBtn').addEventListener('click', () => {
+  forcePortrait = true; resize(); Sfx.unlock();
+});
+// 触屏设备显示虚拟按键
+if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+  document.getElementById('touch').style.display = 'block';
+  touchMode = true;
+}
+
+// ---------------- 关卡主题：视觉 + 背景音乐 ----------------
+// 每关一套配色/星云/星球/地块材质，以及一套用音序器实时合成的 BGM
+const THEMES = [
+  { // 0 · 冰天雪地：极光冰原，空灵晶莹
+    name: '冰天雪地', bgm: 'Frost Aurora（霜华极光）',
+    sky: [[0, '#1d4a7a'], [0.45, '#0e2a4d'], [1, '#050d1c']],
+    nebula: [[150, 110, 230, 'rgba(120,200,255,.24)'], [740, 130, 250, 'rgba(90,160,230,.22)'],
+             [430, 400, 290, 'rgba(160,220,255,.16)'], [70, 360, 210, 'rgba(70,140,210,.18)']],
+    stars: 330, tint: '225,245,255',
+    planetBg: '#0d2a4a',
+    planets: [
+      { x: .14, y: .22, r: 58, c1: '#a8d8f0', c2: '#2a5a80', sp: .05, ring: false },
+      { x: .74, y: .72, r: 92, c1: '#7fc4e8', c2: '#16405e', sp: .03, ring: true },
+      { x: .46, y: .14, r: 28, c1: '#e0f4ff', c2: '#4a7a9a', sp: .08, ring: false }
+    ],
+    rock: ['#2b4a6e', '#5d8fb8'], plat: ['#1e3a5c', '#6fa8d8'], platGlow: 'rgba(190,235,255,.55)',
+    spike: '#cfe8f8',
+    ambient: { kind: 'snow', color: '#eaf7ff', n: 110, size: 2.1, alpha: .75 },
+    bpm: 92, bassOff: -24, bassWave: 'sine', leadWave: 'sine', padWave: 'sine',
+    chords: [[57, 60, 64], [53, 57, 60], [55, 59, 62], [52, 55, 59]],
+    root: 76, leadOct: 12, motif: [0, 7, 12, 9, 7, 4, 2, 0], motifEvery: 4,
+    kick: [0], snare: [], hat: [8], leadVol: .05,
+    bell: [2, 10, 26, 34, 50, 58], bellVol: .034, swing: 0
+  },
+  { // 1 · 火炉山：熔岩玄武岩，急促锻打
+    name: '火炉山', bgm: 'Magma Forge（熔炉锻打）',
+    sky: [[0, '#4a1408'], [0.5, '#26090a'], [1, '#0d0304']],
+    nebula: [[170, 130, 250, 'rgba(255,90,20,.30)'], [770, 120, 270, 'rgba(200,40,10,.26)'],
+             [470, 420, 310, 'rgba(255,160,40,.20)'], [60, 350, 210, 'rgba(140,20,60,.18)']],
+    stars: 170, tint: '255,200,150',
+    planetBg: '#2e0a06',
+    planets: [
+      { x: .28, y: .24, r: 100, c1: '#ff7a2a', c2: '#5a1004', sp: .035, ring: true },
+      { x: .80, y: .70, r: 56, c1: '#c43a12', c2: '#3a0a04', sp: .055, ring: false },
+      { x: .58, y: .12, r: 24, c1: '#ffc860', c2: '#8a3208', sp: .10, ring: false }
+    ],
+    rock: ['#3d1a12', '#8a3a1e'], plat: ['#2a0e08', '#e06a20'], platGlow: 'rgba(255,150,50,.55)',
+    spike: '#e0a080',
+    ambient: { kind: 'ember', color: '#ffb04a', n: 80, size: 2.3, alpha: .8 },
+    bpm: 150, bassOff: -12, bassWave: 'sawtooth', leadWave: 'square', padWave: 'sawtooth',
+    chords: [[50, 53, 57], [46, 50, 53], [43, 46, 50], [45, 49, 52]],
+    root: 62, leadOct: 0, motif: [0, 3, 5, 3, 7, 5, 3, 0], motifEvery: 2,
+    kick: [0, 3, 6, 8, 11, 14], snare: [4, 12], hat: [0, 2, 4, 6, 8, 10, 12, 14],
+    leadVol: .05, tom: [7, 15], swing: .10
+  },
+  { // 2 · 热带雨林：翡翠树冠，马林巴切分
+    name: '热带雨林', bgm: 'Emerald Canopy（翡翠树冠）',
+    sky: [[0, '#0e3a30'], [0.5, '#07211e'], [1, '#030f0e']],
+    nebula: [[180, 120, 240, 'rgba(60,200,140,.26)'], [730, 150, 260, 'rgba(120,220,90,.22)'],
+             [450, 410, 300, 'rgba(40,170,180,.20)'], [80, 340, 220, 'rgba(200,230,80,.14)']],
+    stars: 230, tint: '225,255,215',
+    planetBg: '#06301f',
+    planets: [
+      { x: .16, y: .20, r: 62, c1: '#7fd86a', c2: '#1a5a2a', sp: .05, ring: false },
+      { x: .76, y: .74, r: 84, c1: '#3fc0a0', c2: '#0a4a44', sp: .03, ring: true },
+      { x: .50, y: .15, r: 30, c1: '#d8f070', c2: '#5a7a12', sp: .09, ring: false }
+    ],
+    rock: ['#2e3a1e', '#5c7a34'], plat: ['#1e2a12', '#7ab04a'], platGlow: 'rgba(180,240,120,.45)',
+    spike: '#a8c070',
+    ambient: { kind: 'pollen', color: '#d8f8a0', n: 70, size: 1.9, alpha: .6 },
+    bpm: 118, bassOff: -12, bassWave: 'triangle', leadWave: 'triangle', padWave: 'sine',
+    chords: [[48, 52, 55], [55, 59, 62], [53, 57, 60], [50, 53, 57]],
+    root: 72, leadOct: 0, motif: [0, 2, 4, 7, 4, 2, 7, 9], motifEvery: 2,
+    kick: [0, 7, 10], snare: [6, 14], hat: [0, 2, 4, 6, 8, 10, 12, 14],
+    leadVol: .055, bell: [4, 12, 20, 28, 36, 44, 52, 60], bellVol: .022, swing: .18
+  },
+  { // 3 · 沙漠古城：黄昏金沙，弗里几亚调式的异域商队
+    name: '沙漠古城', bgm: 'Sunken Caravan（沙海商队）',
+    sky: [[0, '#7a4a18'], [0.5, '#3a2008'], [1, '#150a04']],
+    nebula: [[170, 120, 240, 'rgba(230,180,80,.24)'], [760, 140, 260, 'rgba(200,120,40,.22)'],
+             [440, 410, 300, 'rgba(255,210,120,.16)'], [70, 340, 210, 'rgba(160,90,30,.18)']],
+    stars: 190, tint: '255,235,200',
+    planetBg: '#3a2408',
+    planets: [
+      { x: .18, y: .22, r: 68, c1: '#f0c060', c2: '#7a4a10', sp: .05, ring: false },
+      { x: .78, y: .72, r: 86, c1: '#d89040', c2: '#5a2a08', sp: .03, ring: true },
+      { x: .52, y: .16, r: 26, c1: '#ffe0a0', c2: '#8a5a12', sp: .09, ring: false }
+    ],
+    rock: ['#5a4020', '#a07840'], plat: ['#3a2810', '#e0a850'], platGlow: 'rgba(255,215,130,.50)',
+    spike: '#c8a070',
+    ambient: { kind: 'sand', color: '#f0d89a', n: 90, size: 1.8, alpha: .55 },
+    bpm: 126, bassOff: -12, bassWave: 'square', leadWave: 'sawtooth', padWave: 'triangle',
+    chords: [[50, 53, 57], [51, 55, 58], [48, 52, 55], [50, 54, 57]],
+    root: 74, leadOct: 0, motif: [0, 1, 5, 0, 3, 1, 0, -2], motifEvery: 2,
+    kick: [0, 6, 10], snare: [4, 12], hat: [0, 2, 3, 5, 6, 8, 10, 11, 13, 14],
+    leadVol: .05, bell: [3, 11, 19, 27, 35, 43, 51, 59], bellVol: .026, swing: .06
+  },
+  { // 4 · 幽蓝深海：静谧深海，缓慢起伏的鲸歌
+    name: '幽蓝深海', bgm: 'Abyssal Whale Song（深渊鲸歌）',
+    sky: [[0, '#0a3a5e'], [0.5, '#041c33'], [1, '#010a14']],
+    nebula: [[200, 130, 250, 'rgba(40,140,220,.26)'], [740, 160, 270, 'rgba(20,90,180,.24)'],
+             [460, 400, 300, 'rgba(80,200,230,.18)'], [60, 350, 220, 'rgba(30,60,160,.20)']],
+    stars: 210, tint: '200,235,255',
+    planetBg: '#03223a',
+    planets: [
+      { x: .20, y: .24, r: 72, c1: '#5ab0e0', c2: '#0a3a5a', sp: .05, ring: false },
+      { x: .72, y: .70, r: 90, c1: '#2e7fb8', c2: '#062038', sp: .03, ring: true },
+      { x: .48, y: .14, r: 28, c1: '#90e0f0', c2: '#1a5a70', sp: .09, ring: false }
+    ],
+    rock: ['#123a5a', '#2e6a94'], plat: ['#0a2438', '#3f8fc0'], platGlow: 'rgba(120,220,255,.50)',
+    spike: '#8fc0d8',
+    ambient: { kind: 'bubble', color: '#bfeaff', n: 60, size: 2.4, alpha: .55 },
+    bpm: 84, bassOff: -24, bassWave: 'sine', leadWave: 'triangle', padWave: 'sine',
+    chords: [[53, 57, 60], [50, 53, 57], [48, 51, 55], [52, 55, 59]],
+    root: 72, leadOct: 12, motif: [0, 4, 7, 12, 7, 4, 2, 0], motifEvery: 4,
+    kick: [0], snare: [], hat: [6, 14],
+    leadVol: .048, bell: [8, 24, 40, 56], bellVol: .030, swing: 0
+  },
+  { // 5 · 雷暴云海：铅灰雷云，全程最急促的终章
+    name: '雷暴云海', bgm: 'Thunder Zenith（雷暴之巅）',
+    sky: [[0, '#2a2a44'], [0.5, '#141428'], [1, '#06060e']],
+    nebula: [[180, 110, 250, 'rgba(120,120,200,.22)'], [750, 150, 270, 'rgba(80,80,160,.24)'],
+             [450, 420, 310, 'rgba(180,140,255,.16)'], [80, 330, 220, 'rgba(60,60,120,.20)']],
+    stars: 150, tint: '220,225,255',
+    planetBg: '#1a1a30',
+    planets: [
+      { x: .26, y: .22, r: 84, c1: '#8a8ac0', c2: '#2a2a4a', sp: .04, ring: true },
+      { x: .76, y: .72, r: 60, c1: '#5a5a90', c2: '#14142a', sp: .055, ring: false },
+      { x: .55, y: .14, r: 24, c1: '#c0c0f0', c2: '#3a3a6a', sp: .10, ring: false }
+    ],
+    rock: ['#2a2a3e', '#565680'], plat: ['#1a1a2a', '#8a7ad0'], platGlow: 'rgba(200,180,255,.50)',
+    spike: '#b0a8d0',
+    ambient: { kind: 'rain', color: '#c8d8ff', n: 120, size: 1.6, alpha: .5 },
+    bpm: 162, bassOff: -12, bassWave: 'triangle', leadWave: 'square', padWave: 'sawtooth',
+    chords: [[45, 48, 52], [43, 46, 50], [41, 44, 48], [46, 50, 53]],
+    root: 69, leadOct: 0, motif: [0, -1, 3, -1, 5, 3, 0, -4], motifEvery: 2,
+    kick: [0, 3, 6, 8, 10, 13], snare: [4, 12, 14], hat: [0, 2, 4, 6, 8, 10, 12, 14],
+    leadVol: .052, tom: [7, 11, 15], swing: .05,
+    thunder: [0]                                        // 每 4 小节循环开头一声闷雷
+  }
+];
+
+// ---------------- 音频系统 ----------------
+const Audio2 = (() => {
+  let ac = null, master = null, noiseBuf = null, vol = 0.85;
+  function ctx() {
+    try {
+      if (!ac) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ac = new AC();
+        master = ac.createGain(); master.gain.value = vol; master.connect(ac.destination);
+        const len = Math.floor(ac.sampleRate * 0.5);
+        noiseBuf = ac.createBuffer(1, len, ac.sampleRate);
+        const d = noiseBuf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      }
+      if (ac.state === 'suspended') ac.resume();
+    } catch (e) { return null; }
+    return ac;
+  }
+  function duck(on) {
+    if (!ac || !master) return;
+    try { master.gain.setTargetAtTime(on ? vol : vol * 0.22, ac.currentTime, 0.08); } catch (e) {}
+  }
+  function tone(freq, t, dur, type, v, slide) {
+    const a = ctx(); if (!a) return;
+    try {
+      const o = a.createOscillator(), g = a.createGain();
+      o.type = type || 'square';
+      o.frequency.setValueAtTime(freq, t);
+      if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, slide), t + dur);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, v), t + 0.014);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.04);
+    } catch (e) {}
+  }
+  function noise(t, dur, v, ftype, f) {
+    const a = ctx(); if (!a || !noiseBuf) return;
+    try {
+      const s = a.createBufferSource(); s.buffer = noiseBuf;
+      const flt = a.createBiquadFilter(); flt.type = ftype; flt.frequency.value = f;
+      const g = a.createGain();
+      g.gain.setValueAtTime(v, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      s.connect(flt); flt.connect(g); g.connect(master);
+      s.start(t); s.stop(t + dur + 0.02);
+    } catch (e) {}
+  }
+  function kick(t) {
+    const a = ctx(); if (!a) return;
+    try {
+      const o = a.createOscillator(), g = a.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(165, t);
+      o.frequency.exponentialRampToValueAtTime(44, t + 0.11);
+      g.gain.setValueAtTime(0.5, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.22);
+    } catch (e) {}
+  }
+  return { ctx, tone, noise, kick, duck, now: () => (ac ? ac.currentTime : 0) };
+})();
+
+// ---------------- 音效 ----------------
+const Sfx = (() => {
+  let on = true;
+  function t0(freq, dur, type, vol, slide) {
+    if (!on) return;
+    Audio2.tone(freq, Audio2.now() + 0.005, dur, type, vol || 0.08, slide);
+  }
+  return {
+    unlock: Audio2.ctx,
+    toggle() { on = !on; return on; },
+    isOn() { return on; },
+    jump()  { t0(420, 0.12, 'square', 0.06, 780); },
+    flip()  { t0(220, 0.28, 'sawtooth', 0.05, 900); },
+    coin()  { t0(980, 0.07, 'triangle', 0.07); setTimeout(() => t0(1420, 0.10, 'triangle', 0.06), 60); },
+    stomp() { t0(300, 0.10, 'square', 0.07, 120); },
+    spin()  { t0(660, 0.14, 'sine', 0.05, 1200); },
+    hurt()  { t0(420, 0.34, 'sawtooth', 0.08, 70); },
+    star()  { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => t0(f, 0.16, 'triangle', 0.08), i * 85)); },
+    clear() { [659, 784, 988, 1318, 1568].forEach((f, i) => setTimeout(() => t0(f, 0.20, 'square', 0.07), i * 110)); },
+    // 彩蛋：彩虹星，上行琶音 + 高八度收尾
+    rainbow() { [523, 659, 784, 1046, 1318, 1568].forEach((f, i) => setTimeout(() => t0(f, 0.16, 'triangle', 0.075), i * 62)); }
+  };
+})();
+
+// ---------------- 背景音乐（每关一套循环音序）----------------
+const Music = (() => {
+  let timer = null, th = null, idx = -1, step = 0, nextT = 0, spb = 0.12, on = true, notes = 0;
+  const m2f = m => 440 * Math.pow(2, (m - 69) / 12);
+
+  function play(i) {
+    stop();
+    th = THEMES[i]; if (!th) return;
+    idx = i;
+    const a = Audio2.ctx(); if (!a) return;
+    spb = 60 / th.bpm / 4;        // 一个十六分音符的秒数
+    step = 0; nextT = a.currentTime + 0.08;
+    timer = setInterval(tick, 25);
+  }
+  function stop() { if (timer) { clearInterval(timer); timer = null; } th = null; idx = -1; }
+  function tick() {
+    if (!th || !on) return;
+    const a = Audio2.ctx(); if (!a) return;
+    try {
+      if (a.state !== 'running') { nextT = a.currentTime + 0.08; return; }
+      if (nextT < a.currentTime - 0.4) nextT = a.currentTime + 0.05;   // 标签页切回来后重新对齐
+      let guard = 0;
+      while (nextT < a.currentTime + 0.15 && guard++ < 48) {
+        playStep(step, nextT);
+        nextT += spb;
+        step = (step + 1) % 64;   // 4 小节 × 16 步
+      }
+    } catch (e) {}
+  }
+  function playStep(s, t) {
+    notes++;
+    const bar = (s >> 4) & 3, inBar = s & 15;
+    const ch = th.chords[bar];
+    // 摇摆：把反拍十六分音符往后推，雨林的切分感 / 熔炉的推进感都来自这里
+    const tt = th.swing ? t + (inBar % 2 ? spb * th.swing : 0) : t;
+    // 贝斯
+    if (inBar === 0 || inBar === 6 || inBar === 8 || inBar === 14) {
+      const bn = ch[0] + th.bassOff + (inBar >= 8 ? 7 : 0);
+      Audio2.tone(m2f(bn), t, spb * 2.2, th.bassWave, 0.10);
+    }
+    // 和弦垫音（每小节起始）
+    if (inBar === 0) for (const n of ch) Audio2.tone(m2f(n - 12), t, spb * 14, th.padWave, 0.030);
+    // 主旋律（第 3 小节后半留白，形成呼吸感）
+    if (s % th.motifEvery === 0 && !(bar === 2 && inBar >= 8)) {
+      const mi = Math.floor(s / th.motifEvery) % th.motif.length;
+      Audio2.tone(m2f(th.root + (th.leadOct || 0) + th.motif[mi]), tt, spb * 1.7, th.leadWave, th.leadVol);
+    }
+    // 高音铃 / 木琴点缀（冰晶的叮咚、雨林的马林巴）
+    if (th.bell && th.bell.indexOf(s) >= 0) {
+      const bn = th.root + 24 + (s % 3 === 0 ? 7 : 0);
+      Audio2.tone(m2f(bn), tt, spb * 3.2, 'sine', th.bellVol || 0.03);
+    }
+    // 鼓组
+    if (th.kick.indexOf(inBar) >= 0) Audio2.kick(t);
+    if (th.snare.indexOf(inBar) >= 0) Audio2.noise(t, 0.15, 0.14, 'highpass', 1500);
+    if (th.hat.indexOf(inBar) >= 0) Audio2.noise(tt, 0.035, 0.045, 'highpass', 7000);
+    // 低音通鼓（熔炉的锻打闷响）
+    if (th.tom && th.tom.indexOf(inBar) >= 0) Audio2.tone(m2f(48), t, 0.16, 'sine', 0.10, 38);
+    // 闷雷（雷暴关每 4 小节循环一次）
+    if (th.thunder && th.thunder.indexOf(inBar) >= 0 && bar === 0) {
+      Audio2.noise(t, 0.55, 0.11, 'lowpass', 380);
+      Audio2.noise(t + 0.02, 0.30, 0.05, 'lowpass', 900);
+    }
+  }
+  return {
+    play, stop,
+    toggle() { on = !on; if (!on) stop(); else if (idx >= 0) play(idx); return on; },
+    isOn() { return on; },
+    current() { return idx; },
+    debug() { return { idx, step, notes, on, bpm: th ? th.bpm : 0, running: !!timer }; }
+  };
+})();
+
+// ---------------- 输入 ----------------
+const input = { left: false, right: false, jump: false, spin: false, flip: false };
+let touchMode = false;
+const pressed = { jump: false, spin: false, flip: false }; // 本帧刚按下
+function setKey(name, down) {
+  if (!(name in input)) return;
+  if (down && !input[name]) pressed[name] = true;
+  input[name] = down;
+}
+const KEYMAP = {
+  ArrowLeft: 'left', KeyA: 'left',
+  ArrowRight: 'right', KeyD: 'right',
+  Space: 'jump', ArrowUp: 'jump', KeyW: 'jump', KeyZ: 'jump',
+  KeyJ: 'spin', KeyX: 'spin',
+  KeyK: 'flip', KeyC: 'flip', ShiftLeft: 'flip'
+};
+// ☆ 彩蛋：Konami 秘技 ↑↑↓↓←→←→BA
+const KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown',
+                'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'KeyB', 'KeyA'];
+let konamiIdx = 0;
+function feedKonami(code) {
+  if (code === KONAMI[konamiIdx]) konamiIdx++;
+  else konamiIdx = (code === KONAMI[0]) ? 1 : 0;
+  if (konamiIdx >= KONAMI.length) { konamiIdx = 0; return triggerKonami(); }
+  return false;
+}
+function triggerKonami() {
+  game.lives += 3; game.score += 3000;
+  if (game.player) {
+    game.player.rainbow = 420;
+    game.player.invuln = Math.max(game.player.invuln, 300);
+  }
+  Sfx.rainbow();
+  toast('★ 传说中的秘技！生命 +3 ｜ 得分 +3000 ★');
+  return true;
+}
+
+window.addEventListener('keydown', e => {
+  if (feedKonami(e.code)) { e.preventDefault(); return; }
+  if (e.code === 'Escape' || e.code === 'KeyP') { togglePause(); e.preventDefault(); return; }
+  if (e.code === 'KeyR') { if (game.state === 'playing' || game.state === 'dying') startLevel(game.levelIdx); e.preventDefault(); return; }
+  if (e.code === 'KeyM') {
+    const s = Music.toggle();
+    toast(s ? '♪ 背景音乐：开' : '♪ 背景音乐：关');
+    return;
+  }
+  const k = KEYMAP[e.code];
+  if (k) { setKey(k, true); e.preventDefault(); Sfx.unlock(); }
+});
+window.addEventListener('keyup', e => { const k = KEYMAP[e.code]; if (k) { setKey(k, false); e.preventDefault(); } });
+window.addEventListener('blur', () => { for (const k in input) input[k] = false; });
+
+// 触屏
+(function bindTouch() {
+  const map = { tL: 'left', tR: 'right', tJ: 'jump', tF: 'flip', tS: 'spin' };
+  for (const id in map) {
+    const el = document.getElementById(id); if (!el) continue;
+    const on = e => { e.preventDefault(); setKey(map[id], true); Sfx.unlock(); };
+    const off = e => { e.preventDefault(); setKey(map[id], false); };
+    el.addEventListener('touchstart', on, { passive: false });
+    el.addEventListener('touchend', off, { passive: false });
+    el.addEventListener('touchcancel', off, { passive: false });
+    el.addEventListener('mousedown', on);
+    window.addEventListener('mouseup', off);
+  }
+})();
+
+// ---------------- 游戏状态 ----------------
+const game = {
+  state: 'title',          // title | playing | dying | clear | gameover | win | paused
+  manual: false,           // 测试模式：由测试脚本手动推进
+  levelIdx: 0,
+  lives: 3, score: 0, time: 0, timeAcc: 0,
+  bits: 0, bitsTotal: 0, stars: 0,
+  tiles: [], w: 0, name: '',
+  player: null, enemies: [], movers: [], spawn: { x: 0, y: 0 },
+  cam: 0, camTarget: 0,
+  deathTimer: 0, flipCd: 0, frame: 0, shake: 0,
+  particles: [], floats: [], toast: null, toastT: 0,
+  prevState: 'title', totalStars: 0,
+  theme: null, intro: 0,
+  rainbow: 0,          // 本次冒险已找到的彩虹星（跨关累计）
+  hold: false          // 竖屏挂起：暂停推进直到转回横屏
+};
+
+function makePlayer(x, y) {
+  return { x, y, w: 20, h: 28, vx: 0, vy: 0, gravity: 1, face: 1,
+           onGround: false, standingOn: null, coyote: 0, buffer: 0,
+           spin: 0, invuln: 0, flipCd: 0, dead: false, anim: 0, prevY: y, prevX: x,
+           rainbow: 0 };   // >0 时角色拖彩虹尾（吃到彩虹星 / 触发秘技）
+}
+
+function isSolid(tx, ty) {
+  if (ty < 0 || ty >= ROWS) return false;
+  if (tx < 0 || tx >= game.w) return true;
+  return SOLID.has(game.tiles[ty][tx]);
+}
+function aabb(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+function tileRect(tx, ty) { return { x: tx * TILE, y: ty * TILE, w: TILE, h: TILE }; }
+
+// ---------------- 关卡加载 ----------------
+function startLevel(idx, opts) {
+  opts = opts || {};
+  const L = LEVELS[idx];
+  game.levelIdx = idx;
+  game.w = L.w; game.name = L.name;
+  game.tiles = L.rows.map(r => r.split(''));
+  game.enemies = []; game.movers = []; game.particles = []; game.floats = [];
+  game.bits = 0; game.bitsTotal = 0; game.stars = 0;
+  game.time = LEVEL_TIME[idx]; game.timeAcc = 0;
+  game.deathTimer = 0; game.flipCd = 0; game.shake = 0;
+  game.cam = 0; game.camTarget = 0;
+  if (opts.lives != null) game.lives = opts.lives;
+
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < game.w; x++) {
+    const c = game.tiles[y][x], px = x * TILE, py = y * TILE;
+    if (c === 'P') { game.spawn = { x: px + 6, y: py + 4 }; game.tiles[y][x] = '.'; }
+    else if (c === 'G') { game.enemies.push(makeEnemy(px + 3, py + 8)); game.tiles[y][x] = '.'; }
+    else if (c === 'M') { game.movers.push(makeMover(px, py, 'h')); game.tiles[y][x] = '.'; }
+    else if (c === 'V') { game.movers.push(makeMover(px, py, 'v')); game.tiles[y][x] = '.'; }
+    else if (c === '*') { game.bitsTotal++; }
+    else if (c === 'S') { game.stars++; }
+  }
+  game.player = makePlayer(game.spawn.x, game.spawn.y);
+  game.state = 'playing';
+  // 切换本关视觉主题与背景音乐
+  game.theme = THEMES[idx] || THEMES[0];
+  game.intro = 170;
+  Music.play(idx);
+  hideOverlay();
+}
+function makeEnemy(x, y) {
+  return { x, y, w: 26, h: 24, vx: -0.85, vy: 0, dead: false, squash: 0, anim: Math.random() * 6 };
+}
+function makeMover(x, y, kind) {
+  const t = Math.random() * Math.PI * 2, range = 96;
+  // 初始位置必须已由 t 决定，否则开局第一帧会瞬移一整个行程
+  return { ox: x, oy: y, range, kind, t, dx: 0, dy: 0,
+           x: kind === 'h' ? x + Math.sin(t) * range : x,
+           y: kind === 'v' ? y + Math.sin(t) * range * 0.8 : y,
+           w: 96, h: 16 };
+}
+
+// ---------------- 物理 ----------------
+function moveX(p, dx) {
+  if (!dx) return;
+  p.x += dx;
+  const y0 = Math.floor(p.y / TILE), y1 = Math.floor((p.y + p.h - 1) / TILE);
+  if (dx > 0) {
+    const tx = Math.floor((p.x + p.w - 1) / TILE);
+    for (let ty = y0; ty <= y1; ty++) if (isSolid(tx, ty)) { p.x = tx * TILE - p.w; p.vx = 0; break; }
+  } else {
+    const tx = Math.floor(p.x / TILE);
+    for (let ty = y0; ty <= y1; ty++) if (isSolid(tx, ty)) { p.x = (tx + 1) * TILE; p.vx = 0; break; }
+  }
+  for (const m of game.movers) {
+    if (!aabb(p, m)) continue;
+    if (dx > 0) { p.x = m.x - p.w; p.vx = 0; } else { p.x = m.x + m.w; p.vx = 0; }
+  }
+}
+function moveY(p, dy) {
+  if (!dy) return;
+  p.y += dy;
+  const x0 = Math.floor(p.x / TILE), x1 = Math.floor((p.x + p.w - 1) / TILE);
+  if (dy > 0) {
+    // 用极小 epsilon：只要边缘“刚接触”下一格就算碰撞，避免落地状态隔帧抖动
+    const ty = Math.floor((p.y + p.h - 0.001) / TILE);
+    for (let tx = x0; tx <= x1; tx++) if (isSolid(tx, ty)) {
+      p.y = ty * TILE - p.h; p.vy = 0; if (p.gravity === 1) p.onGround = true; break;
+    }
+  } else if (dy < 0) {
+    const ty = Math.floor((p.y + 0.001) / TILE);
+    for (let tx = x0; tx <= x1; tx++) if (isSolid(tx, ty)) {
+      p.y = (ty + 1) * TILE; p.vy = 0; if (p.gravity === -1) p.onGround = true; break;
+    }
+  }
+  for (const m of game.movers) {
+    if (!aabb(p, m)) continue;
+    if (dy > 0 && p.vy >= 0) {
+      p.y = m.y - p.h; p.vy = 0;
+      if (p.gravity === 1) { p.onGround = true; p.standingOn = m; }
+    } else if (dy < 0 && p.vy <= 0) {
+      p.y = m.y + m.h; p.vy = 0;
+      if (p.gravity === -1) { p.onGround = true; p.standingOn = m; }
+    }
+  }
+}
+
+function flipGravity(force) {
+  const p = game.player;
+  if (p.dead) return false;
+  if (p.flipCd > 0 && !force) return false;
+  p.gravity = -p.gravity;
+  p.vy = p.gravity === 1 ? 0.6 : -0.6;
+  p.onGround = false; p.standingOn = null;
+  p.flipCd = FLIP_CD; game.flipCd = FLIP_CD;
+  for (let i = 0; i < 14; i++) spark(p.x + p.w / 2, p.y + p.h / 2, '#7fe8ff');
+  Sfx.flip();
+  return true;
+}
+
+function spark(x, y, color) {
+  const a = Math.random() * Math.PI * 2, s = 1 + Math.random() * 3;
+  game.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 24 + Math.random() * 18, c: color || '#ffe07a' });
+}
+function floatText(x, y, t, c) { game.floats.push({ x, y, t, c: c || '#ffe07a', life: 46 }); }
+
+function die(reason) {
+  const p = game.player;
+  if (game.state !== 'playing' || p.dead) return;
+  p.dead = true; game.state = 'dying'; game.deathTimer = DEATH_TIME;
+  game.lives--; game.shake = 12; Sfx.hurt();
+  for (let i = 0; i < 24; i++) spark(p.x + p.w / 2, p.y + p.h / 2, '#ff8a6a');
+  floatText(p.x, p.y, reason || '啊——！', '#ff8a6a');
+}
+function respawn() {
+  const p = game.player;
+  p.x = game.spawn.x; p.y = game.spawn.y; p.vx = 0; p.vy = 0;
+  p.gravity = 1; p.dead = false; p.invuln = INVULN; p.spin = 0; p.flipCd = 0;
+  p.onGround = false; p.standingOn = null;
+  // 重置敌人与移动平台
+  game.enemies = []; game.movers = [];
+  const L = LEVELS[game.levelIdx];
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < game.w; x++) {
+    if (L.rows[y][x] === 'G') game.enemies.push(makeEnemy(x * TILE + 3, y * TILE + 8));
+    else if (L.rows[y][x] === 'M') game.movers.push(makeMover(x * TILE, y * TILE, 'h'));
+    else if (L.rows[y][x] === 'V') game.movers.push(makeMover(x * TILE, y * TILE, 'v'));
+  }
+  game.state = 'playing';
+}
+
+function clearLevel() {
+  game.state = 'clear';
+  game.totalStars++;
+  Music.stop();
+  const bonus = 1000 + Math.floor(game.time) * 10;
+  game.score += bonus; Sfx.clear();
+  const last = game.levelIdx >= LEVELS.length - 1;
+  if (last) {
+    game.state = 'win';
+    const allRainbow = game.rainbow >= RAINBOW_TOTAL;
+    showOverlay(
+      `<div class="subtitle">MISSION COMPLETE</div>
+       <div class="title" style="white-space:nowrap">银河大救援成功！</div>
+       <div class="card">你走遍 <b>${LEVELS.length}</b> 座星球，集齐了 <b>${game.totalStars}</b> 颗力量星，救回了碧姬公主与整个银河。<br>
+       最终得分 <b>${game.score}</b> ｜ 剩余生命 <b>${game.lives}</b><br>
+       <span style="color:#ffd86b">🌈 隐藏彩虹星 ${game.rainbow}/${RAINBOW_TOTAL}</span>
+       ${allRainbow
+         ? '<br><b style="color:#7dff9b">★ 彩虹收集者：你找到了全部隐藏彩虹星，银河的每一道光谱都属于你 ★</b>'
+         : '<br><span style="opacity:.75">每关都藏着一颗彩虹星，试试在天花板上找找</span>'}</div>`,
+      '再玩一次', () => { game.score = 0; game.totalStars = 0; game.lives = 3; game.rainbow = 0; startLevel(0); },
+      { cast: true });
+  } else {
+    showOverlay(
+      `<div class="subtitle">COURSE CLEAR</div>
+       <div class="title" style="white-space:nowrap">${game.name} 通过！</div>
+       <div class="card">力量星 <b>+1</b> ｜ 星星币 <b>${game.bits}/${game.bitsTotal}</b> ｜ 时间奖励 <b>+${bonus}</b><br>
+       当前总分 <b>${game.score}</b></div>`,
+      '进入下一关', () => startLevel(game.levelIdx + 1));
+  }
+}
+
+// ---------------- 更新 ----------------
+function update() {
+  game.frame++;
+  if (game.hold) return;   // 竖屏提示期间冻结世界
+
+  // 粒子 / 浮字
+  for (let i = game.particles.length - 1; i >= 0; i--) {
+    const q = game.particles[i];
+    q.x += q.vx; q.y += q.vy; q.vy += 0.06; q.life--;
+    if (q.life <= 0) game.particles.splice(i, 1);
+  }
+  for (let i = game.floats.length - 1; i >= 0; i--) {
+    const f = game.floats[i]; f.y -= 0.7; f.life--;
+    if (f.life <= 0) game.floats.splice(i, 1);
+  }
+  if (game.shake > 0) game.shake *= 0.86;
+  if (game.toastT > 0) game.toastT--;
+  if (game.intro > 0) game.intro--;
+
+  if (game.state === 'title' || game.state === 'clear' || game.state === 'win' || game.state === 'gameover' || game.state === 'paused') return;
+
+  const p = game.player;
+
+  // ---- 死亡动画 ----
+  if (game.state === 'dying') {
+    game.deathTimer--;
+    if (game.deathTimer <= 0) {
+      if (game.lives <= 0) {
+        game.state = 'gameover';
+        Music.stop();
+        showOverlay(
+          `<div class="subtitle">GAME OVER</div>
+           <div class="title">任务失败</div>
+           <div class="card">生命耗尽了。银河还在等你，再来一次吧！<br>本局得分 <b>${game.score}</b></div>`,
+          '重新开始', () => { game.score = 0; game.totalStars = 0; game.lives = 3; startLevel(0); });
+      } else respawn();
+    }
+    return;
+  }
+
+  // ---- 计时 ----
+  game.timeAcc++;
+  if (game.timeAcc >= 60) { game.timeAcc = 0; game.time--; if (game.time <= 0) { game.time = 0; die('时间到！'); return; } }
+
+  // ---- 移动平台先行 ----
+  for (const m of game.movers) {
+    const px = m.x, py = m.y;
+    m.t += 0.02;
+    if (m.kind === 'h') m.x = m.ox + Math.sin(m.t) * m.range;
+    else m.y = m.oy + Math.sin(m.t) * (m.range * 0.8);
+    m.dx = m.x - px; m.dy = m.y - py;
+  }
+  if (p.standingOn) { p.x += p.standingOn.dx; p.y += p.standingOn.dy; }
+
+  // ---- 玩家输入 ----
+  p.prevX = p.x; p.prevY = p.y;
+  if (p.flipCd > 0) p.flipCd--;
+  if (p.invuln > 0) p.invuln--;
+  if (p.spin > 0) p.spin--;
+  if (p.rainbow > 0) p.rainbow--;
+  if (game.flipCd > 0) game.flipCd--;
+  p.anim++;
+
+  if (pressed.flip) flipGravity(false);
+  if (pressed.spin && p.spin <= 0) {
+    p.spin = SPIN_TIME; Sfx.spin();
+    if (p.onGround) p.vy = -p.gravity * 5.2; // 旋转小跳
+  }
+
+  const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+  if (dir) {
+    p.vx += dir * RUN_ACC;
+    if (Math.abs(p.vx) > RUN_MAX) p.vx = RUN_MAX * Math.sign(p.vx);
+    p.face = dir;
+  } else {
+    p.vx *= (p.onGround ? FRIC_GND : FRIC_AIR);
+    if (Math.abs(p.vx) < 0.08) p.vx = 0;
+  }
+
+  // 跳跃：基于上一帧落地状态（土狼时间）+ 输入缓冲
+  if (pressed.jump) p.buffer = BUFFER;
+  if (p.onGround) p.coyote = COYOTE; else if (p.coyote > 0) p.coyote--;
+  if (p.buffer > 0) p.buffer--;
+
+  if (p.buffer > 0 && p.coyote > 0) {
+    p.vy = -JUMP_V * p.gravity;
+    p.buffer = 0; p.coyote = 0;
+    for (let i = 0; i < 6; i++) spark(p.x + p.w / 2, p.y + (p.gravity === 1 ? p.h : 0), '#cfe0ff');
+    Sfx.jump();
+  }
+  // 松开跳跃键 → 提前截断上升（可变跳跃高度）
+  if (!input.jump && p.vy * p.gravity < 0) p.vy *= (1 - JUMP_CUT * 0.35);
+
+  // 重置本帧落地标记，交由碰撞重新判定
+  p.onGround = false; p.standingOn = null;
+
+  // 重力
+  p.vy += GRAV * p.gravity;
+  if (Math.abs(p.vy) > MAX_FALL) p.vy = MAX_FALL * Math.sign(p.vy);
+
+  moveX(p, p.vx);
+  moveY(p, p.vy);
+
+  // ---- 出界 ----
+  if (p.y > ROWS * TILE + 80 || p.y + p.h < -80) { die('掉进宇宙了！'); return; }
+
+  // ---- 敌人 ----
+  for (const e of game.enemies) {
+    if (e.dead) { if (e.squash > 0) e.squash--; continue; }
+    e.anim++;
+    e.vy += GRAV; if (e.vy > MAX_FALL) e.vy = MAX_FALL;
+    const ox = e.x, oy = e.y;
+    e.x += e.vx;
+    if (collideEnemyTiles(e)) { e.x = ox; e.vx = -e.vx; }
+    e.y += e.vy;
+    if (collideEnemyTiles(e)) {
+      e.y = oy;
+      if (e.vy > 0) e.onGround = true;
+      e.vy = 0;
+    } else e.onGround = false;
+    // 走到边缘就掉头（脚下无路）
+    if (e.onGround) {
+      const fx = e.vx > 0 ? e.x + e.w + 2 : e.x - 2;
+      const tx = Math.floor(fx / TILE), ty = Math.floor((e.y + e.h + 4) / TILE);
+      if (!isSolid(tx, ty)) e.vx = -e.vx;
+    }
+    if (e.y > ROWS * TILE + 60) e.dead = true;
+
+    if (!aabb(p, e)) continue;
+    // 判定踩踏 or 受伤
+    const stompSide = p.gravity === 1
+      ? (p.prevY + p.h <= e.y + 12)
+      : (p.prevY >= e.y + e.h - 12);
+    if ((p.vy * p.gravity > 0 && stompSide) || p.spin > 0) {
+      e.dead = true; e.squash = 22;
+      p.vy = -p.gravity * 9.2;
+      game.score += 200; Sfx.stomp();
+      for (let i = 0; i < 12; i++) spark(e.x + e.w / 2, e.y + e.h / 2, '#c9a2ff');
+      floatText(e.x, e.y, '+200', '#c9a2ff');
+    } else if (p.invuln <= 0) {
+      die('被击中了！'); return;
+    }
+  }
+
+  // ---- 地块交互 ----
+  const px0 = Math.floor((p.x + 3) / TILE), px1 = Math.floor((p.x + p.w - 3) / TILE);
+  const py0 = Math.floor((p.y - 2) / TILE), py1 = Math.floor((p.y + p.h + 2) / TILE);
+  for (let ty = py0; ty <= py1; ty++) for (let tx = px0; tx <= px1; tx++) {
+    if (tx < 0 || tx >= game.w || ty < 0 || ty >= ROWS) continue;
+    const c = game.tiles[ty][tx];
+    if (!c || c === '.') continue;
+    if (c === '*') {
+      game.tiles[ty][tx] = '.'; game.bits++; game.score += 100; Sfx.coin();
+      for (let i = 0; i < 8; i++) spark(tx * TILE + 16, ty * TILE + 16, '#ffe07a');
+      if (game.bits === game.bitsTotal && game.bitsTotal > 0) {
+        game.lives++; floatText(p.x, p.y - 10, '全收集！+1 生命', '#7dff9b');
+      }
+    } else if (c === 'S') {
+      game.tiles[ty][tx] = '.'; game.score += 500; Sfx.star();
+      for (let i = 0; i < 40; i++) spark(tx * TILE + 16, ty * TILE + 16, '#fff2a8');
+      clearLevel(); return;
+    } else if (c === 'R') {
+      // ☆ 彩蛋：隐藏彩虹星
+      game.tiles[ty][tx] = '.'; game.rainbow++;
+      game.score += 1000; p.rainbow = 300; p.invuln = Math.max(p.invuln, 180);
+      Sfx.rainbow();
+      const cols = ['#ff5f6d', '#ffc371', '#7dff9b', '#7fe8ff', '#c9a2ff'];
+      for (let i = 0; i < 46; i++) spark(tx * TILE + 16, ty * TILE + 16, cols[i % cols.length]);
+      floatText(p.x, p.y - 18, '+1000  彩虹星！', '#ffd86b');
+      toast(game.rainbow >= RAINBOW_TOTAL
+        ? `🌈 集齐全部 ${RAINBOW_TOTAL} 颗彩虹星！`
+        : `🌈 发现隐藏彩虹星！(${game.rainbow}/${RAINBOW_TOTAL})`);
+    } else if (c === '^') {
+      if (p.invuln <= 0) { die('扎到尖刺了！'); return; }
+    } else if (c === 'F') {
+      // 重力板：踏上即翻转
+      const near = p.gravity === 1
+        ? (p.y + p.h >= ty * TILE - 2 && p.y + p.h <= ty * TILE + 12)
+        : (p.y <= (ty + 1) * TILE + 2 && p.y >= (ty + 1) * TILE - 12);
+      if (near && p.flipCd <= 0) { flipGravity(true); p.flipCd = FLIP_CD; }
+    }
+  }
+
+  // ---- 相机 ----
+  const want = p.x + p.w / 2 - VIEW_W * 0.42;
+  game.camTarget = Math.max(0, Math.min(game.w * TILE - VIEW_W, want));
+  game.cam += (game.camTarget - game.cam) * 0.12;
+}
+// 一步：更新后清除“本帧刚按下”标记（供边沿触发使用）
+function step() {
+  update();
+  for (const k in pressed) pressed[k] = false;
+}
+function collideEnemyTiles(e) {
+  const x0 = Math.floor(e.x / TILE), x1 = Math.floor((e.x + e.w - 1) / TILE);
+  const y0 = Math.floor(e.y / TILE), y1 = Math.floor((e.y + e.h - 1) / TILE);
+  for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) if (isSolid(tx, ty)) return true;
+  return false;
+}
+
+// ---------------- 渲染 ----------------
+// 每关一张预渲染星空背景（懒加载 + 缓存）
+const bgCache = [];
+function makeBg(th) {
+  // 背景按实际显示分辨率预渲染，避免在大屏上被放大糊掉；上限 2 倍，防止 4K 下占用过高
+  const S = Math.max(1, Math.min(2, baseScale));
+  const W = Math.round(VIEW_W * S), H = Math.round(VIEW_H * S);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 0, H);
+  for (const [pos, col] of th.sky) grd.addColorStop(pos, col);
+  g.fillStyle = grd; g.fillRect(0, 0, W, H);
+  for (const [x, y, r, col] of th.nebula) {
+    const rg = g.createRadialGradient(x * S, y * S, 0, x * S, y * S, r * S);
+    rg.addColorStop(0, col); rg.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = rg; g.beginPath(); g.arc(x * S, y * S, r * S, 0, 7); g.fill();
+  }
+  let s = 987654321;
+  const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  for (let i = 0; i < th.stars; i++) {
+    const x = rnd() * W, y = rnd() * H, r = (rnd() * 1.6 + 0.3) * Math.max(1, S * 0.85);
+    g.fillStyle = `rgba(${th.tint},${0.22 + rnd() * 0.72})`;
+    g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+  }
+  // 星球背景圆（横向视差球体，增加场景深度）
+  for (const pl of th.planets) {
+    const px = pl.x * W, py = pl.y * H, pr = pl.r * 2.6 * S;
+    const rg2 = g.createRadialGradient(px, py, 0, px, py, pr);
+    rg2.addColorStop(0, th.planetBg || '#101030');
+    rg2.addColorStop(0.45, th.planetBg || '#101030');
+    rg2.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = rg2;
+    g.beginPath(); g.arc(px, py, pr, 0, 7); g.fill();
+  }
+  return c;
+}
+function bgFor(i) {
+  if (!bgCache[i]) bgCache[i] = makeBg(THEMES[i] || THEMES[0]);
+  return bgCache[i];
+}
+
+// 环境天气层：飘雪 / 上升火星 / 浮空花粉，纯屏幕空间，随相机做轻微视差
+const wrap01 = (v, m) => ((v % m) + m) % m;
+function drawAmbient(g, th, t) {
+  const a = th.ambient; if (!a) return;
+  g.save();
+  g.fillStyle = a.color;
+  for (let i = 0; i < a.n; i++) {
+    const ph = (i * 0.6180339887) % 1;                  // 黄金分割分散相位
+    const ph2 = (i * 0.3819660113) % 1;                 // 第二个相位（用于纵向散布）
+    const sp = 0.35 + ((i * 37) % 100) / 100 * 0.9;     // 每颗速度略有差异
+    let x, y;
+    if (a.kind === 'ember') {                            // 火星：向上飘
+      x = wrap01(ph * VIEW_W + Math.sin(t * 0.02 + i) * 18 - game.cam * 0.18, VIEW_W);
+      y = VIEW_H - wrap01(t * sp * 1.15 + i * 71, VIEW_H + 40) + 20;
+    } else if (a.kind === 'pollen') {                    // 花粉：极缓慢浮动
+      x = wrap01(ph * VIEW_W + Math.sin(t * 0.008 + i * 1.7) * 34 - game.cam * 0.30, VIEW_W);
+      y = wrap01(t * sp * 0.34 + i * 53, VIEW_H + 40) - 20;
+    } else if (a.kind === 'bubble') {                    // 气泡：缓慢上升 + 左右摇摆
+      x = wrap01(ph * VIEW_W + Math.sin(t * 0.014 + i * 2.1) * 22 - game.cam * 0.22, VIEW_W);
+      y = VIEW_H - wrap01(t * sp * 0.6 + i * 47, VIEW_H + 40) + 20;
+    } else if (a.kind === 'sand') {                      // 吹沙：横向掠过 + 微微下沉
+      x = wrap01(ph * VIEW_W + t * sp * 2.1 - game.cam * 0.55, VIEW_W);
+      y = wrap01(ph2 * VIEW_H + t * sp * 0.25 + Math.sin(t * 0.02 + i) * 12, VIEW_H + 40) - 20;
+    } else if (a.kind === 'rain') {                      // 暴雨：快速斜向下落
+      x = wrap01(ph * VIEW_W + t * sp * 0.5 - game.cam * 0.35, VIEW_W);
+      y = wrap01(t * sp * 2.6 + i * 43, VIEW_H + 40) - 20;
+    } else {                                             // snow：飘雪下落
+      x = wrap01(ph * VIEW_W + Math.sin(t * 0.012 + i * 1.7) * 30 - game.cam * 0.28, VIEW_W);
+      y = wrap01(t * sp * 0.85 + i * 61, VIEW_H + 40) - 20;
+    }
+    const r = a.size * (0.6 + ((i * 53) % 100) / 100 * 0.8);
+    g.globalAlpha = a.alpha * (0.45 + 0.55 * Math.abs(Math.sin(t * 0.03 + i)));
+    if (a.kind === 'rain') {                             // 雨丝：细长斜线
+      g.strokeStyle = a.color; g.lineWidth = Math.max(1, r * 0.8); g.lineCap = 'round';
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x - 3.5, y + 15); g.stroke();
+    } else {
+      g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    }
+  }
+  g.restore();
+}
+
+function drawStar(g, cx, cy, r, rot, fill, glow) {
+  g.save(); g.translate(cx, cy); g.rotate(rot);
+  if (glow) { g.shadowColor = glow; g.shadowBlur = 16; }
+  g.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const rr = i % 2 ? r * 0.46 : r;
+    const a = -Math.PI / 2 + i * Math.PI / 5;
+    const x = Math.cos(a) * rr, y = Math.sin(a) * rr;
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  }
+  g.closePath(); g.fillStyle = fill; g.fill();
+  g.restore();
+}
+
+/* =========================================================
+   像素角色绘制（游戏内与结算画面共用同一套代码）
+   —— 均以「角色中心」为原点绘制，调用方负责 translate / scale / rotate
+   sw   : 迈步·摆臂的相位摆动量（像素）
+   face : 朝向 ±1
+   ========================================================= */
+function drawMarioSprite(g, sw, face) {
+  const sx = face * -10, sy = -14; // 以中心为原点绘制
+  // 腿/鞋
+  g.fillStyle = '#3b2a1c';
+  g.fillRect(sx - 6 - sw, sy + 20, 7, 6); g.fillRect(sx + 3 + sw, sy + 20, 7, 6);
+  // 背带裤
+  g.fillStyle = '#2b56c8';
+  g.fillRect(sx - 7, sy + 12, 14, 10);
+  g.fillStyle = '#ffd400'; g.fillRect(sx - 4, sy + 14, 3, 3); g.fillRect(sx + 2, sy + 14, 3, 3);
+  // 上衣
+  g.fillStyle = '#e03a2f';
+  g.fillRect(sx - 7, sy + 4, 14, 9);
+  // 手套
+  g.fillStyle = '#fff';
+  g.fillRect(sx - 10 - sw, sy + 8, 5, 5); g.fillRect(sx + 7 + sw, sy + 8, 5, 5);
+  // 脸
+  g.fillStyle = '#f7c9a0'; g.fillRect(sx - 5, sy - 4, 10, 8);
+  g.fillStyle = '#22160f';
+  g.fillRect(sx + (face > 0 ? 1 : -3), sy - 1, 2, 3);
+  // 胡子
+  g.fillStyle = '#3a2416'; g.fillRect(sx - 5, sy + 2, 10, 2);
+  // 帽子
+  g.fillStyle = '#e03a2f';
+  g.fillRect(sx - 6, sy - 8, 12, 5);
+  g.fillRect(sx + (face > 0 ? 2 : -6), sy - 6, 8, 2);
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(sx, sy - 5, 1.9, 0, 7); g.fill();
+}
+
+/* 碧姬公主：金色长发 + 粉色钟形长裙 + 小巧皇冠（与马力欧同比例、同像素风格） */
+function drawPeachSprite(g, sw, face, t) {
+  const sx = face * -10, sy = -14;
+  const flap = Math.sin((t || 0) * 0.06) * 1.2;          // 裙摆飘动
+  // 后层长发（垂至腰际，收在肩宽内）
+  g.fillStyle = '#f0c94a'; g.fillRect(sx - 7, sy - 5, 14, 17);
+  g.fillStyle = '#dcae32';                                // 发丝暗部
+  g.fillRect(sx - 7, sy + 7, 2, 6); g.fillRect(sx + 5, sy + 7, 2, 6);
+  // 钟形长裙：自上而下逐层加宽
+  g.fillStyle = '#ffe0ef'; g.fillRect(sx - 5, sy + 8, 11, 4);
+  g.fillStyle = '#ffc2de'; g.fillRect(sx - 7, sy + 12, 15, 4);
+  g.fillStyle = '#ff9ecf'; g.fillRect(sx - 9, sy + 16, 19, 4);
+  g.fillStyle = '#ff86c2'; g.fillRect(sx - 10, sy + 20, 21, 3);
+  g.fillStyle = '#e8639f'; g.fillRect(sx - 10, sy + 23, 21, 2);   // 裙摆深粉边
+  g.fillStyle = 'rgba(255,255,255,.22)';                          // 裙褶高光
+  g.fillRect(sx - 4, sy + 16, 1, 7); g.fillRect(sx + 3, sy + 16, 1, 7);
+  // 上身胸衣（与裙摆同色系，连身裙观感）
+  g.fillStyle = '#ffa8d4'; g.fillRect(sx - 4, sy + 3, 9, 5);
+  g.fillStyle = '#ff8ec7'; g.fillRect(sx - 4, sy + 3, 9, 1);      // 领口深粉边
+  // 泡泡袖
+  g.fillStyle = '#ff9ecf';
+  g.fillRect(sx - 7, sy + 3, 3, 4); g.fillRect(sx + 5, sy + 3, 3, 4);
+  // 白手套（随摆臂相位动）
+  g.fillStyle = '#ffffff';
+  g.fillRect(sx - 9 - sw, sy + 7, 4, 4); g.fillRect(sx + 6 + sw, sy + 7, 4, 4);
+  // 脸
+  g.fillStyle = '#ffe3cb'; g.fillRect(sx - 4, sy - 4, 9, 8);
+  // 蓝眼睛（眼白 + 瞳孔）
+  g.fillStyle = '#ffffff'; g.fillRect(sx + (face > 0 ? 0 : -4), sy - 2, 4, 4);
+  g.fillStyle = '#2f6fd8'; g.fillRect(sx + (face > 0 ? 1 : -3), sy - 1, 2, 3);
+  // 腮红 + 嘴唇
+  g.fillStyle = '#ffaac4'; g.fillRect(sx + (face > 0 ? 3 : -5), sy + 2, 2, 1);
+  g.fillStyle = '#e8628f'; g.fillRect(sx - 1, sy + 2, 3, 1);
+  // 刘海与鬓发
+  g.fillStyle = '#f0c94a';
+  g.fillRect(sx - 5, sy - 6, 11, 3);
+  g.fillRect(sx - 6, sy - 4, 2, 6); g.fillRect(sx + 5, sy - 4, 2, 6);
+  g.fillStyle = '#ffe27a'; g.fillRect(sx - 3, sy - 6, 4, 2);      // 刘海分缝高光
+  // 皇冠（小巧，三尖带蓝宝石）
+  g.fillStyle = '#ffd23f';
+  g.fillRect(sx - 4, sy - 10, 9, 3);
+  g.fillRect(sx - 4, sy - 12, 2, 2); g.fillRect(sx - 1, sy - 13, 2, 3); g.fillRect(sx + 2, sy - 12, 2, 2);
+  g.fillStyle = '#e09414'; g.fillRect(sx - 4, sy - 8, 9, 1);      // 冠底暗边
+  g.fillStyle = '#5ec8ff'; g.fillRect(sx - 1, sy - 10, 3, 2);     // 冠上蓝宝石
+  // 蓝宝石耳环
+  g.fillStyle = '#5ec8ff'; g.fillRect(sx + (face > 0 ? -6 : 4), sy + 2, 2, 2);
+}
+
+function render() {
+  const g = ctx;
+  const th = game.theme || THEMES[0];
+  // 关键：把 916×544 的逻辑坐标放大到画布物理像素，否则画面只画在左上角一小块
+  g.setTransform(baseScale, 0, 0, baseScale, 0, 0);
+  g.clearRect(0, 0, VIEW_W, VIEW_H);
+  g.drawImage(bgFor(game.levelIdx), 0, 0, VIEW_W, VIEW_H);
+
+  const t = game.frame;
+  // 视差星球
+  for (const pl of th.planets) {
+    const x = ((pl.x * VIEW_W - game.cam * pl.sp) % (VIEW_W + 300) + VIEW_W + 300) % (VIEW_W + 300) - 150;
+    const y = pl.y * VIEW_H + Math.sin(t * 0.006 + pl.x * 9) * 8;
+    // 星球背景光晕
+    const rgBg = g.createRadialGradient(x, y, 0, x, y, pl.r * 2.2);
+    rgBg.addColorStop(0, th.planetBg || '#101030');
+    rgBg.addColorStop(0.6, th.planetBg || '#101030');
+    rgBg.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = rgBg;
+    g.beginPath(); g.arc(x, y, pl.r * 2.2, 0, 7); g.fill();
+    g.save();
+    g.globalAlpha = 0.35;                       // 星球做背景，避免抢视觉
+    const rg = g.createRadialGradient(x - pl.r * .3, y - pl.r * .3, pl.r * .1, x, y, pl.r);
+    rg.addColorStop(0, pl.c1); rg.addColorStop(1, pl.c2);
+    g.fillStyle = rg; g.beginPath(); g.arc(x, y, pl.r, 0, 7); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,.10)'; g.lineWidth = 2;
+    g.beginPath(); g.ellipse(x, y, pl.r * 1.35, pl.r * 0.20, -0.4, 0, 7); g.stroke();
+    if (pl.ring) {
+      g.strokeStyle = 'rgba(255,255,255,.14)'; g.lineWidth = 3;
+      g.beginPath(); g.ellipse(x, y, pl.r * 1.55, pl.r * 0.34, -0.35, 0, 7); g.stroke();
+    }
+    g.restore();
+  }
+
+  const shakeX = game.shake > 0.4 ? (Math.random() - 0.5) * game.shake : 0;
+  const shakeY = game.shake > 0.4 ? (Math.random() - 0.5) * game.shake : 0;
+  const cam = Math.round(game.cam);
+  g.save();
+  g.translate(-cam + shakeX, shakeY);
+
+  // ---- 地块 ----
+  const tx0 = Math.max(0, Math.floor(cam / TILE)), tx1 = Math.min(game.w - 1, Math.ceil((cam + VIEW_W) / TILE));
+  for (let ty = 0; ty < ROWS; ty++) for (let tx = tx0; tx <= tx1; tx++) {
+    const c = game.tiles[ty] && game.tiles[ty][tx];
+    if (!c || c === '.') continue;
+    const x = tx * TILE, y = ty * TILE;
+    if (c === '#') {
+      g.fillStyle = th.rock[0]; g.fillRect(x, y, TILE, TILE);
+      g.fillStyle = th.rock[1]; g.fillRect(x, y, TILE, 5);
+      g.fillStyle = 'rgba(255,255,255,.10)';
+      g.fillRect(x + 6, y + 12, 5, 3); g.fillRect(x + 19, y + 21, 7, 3);
+      g.strokeStyle = 'rgba(10,14,35,.55)'; g.lineWidth = 1;
+      g.strokeRect(x + .5, y + .5, TILE - 1, TILE - 1);
+    } else if (c === '=') {
+      g.fillStyle = th.plat[0]; g.fillRect(x, y, TILE, TILE);
+      g.fillStyle = th.plat[1]; g.fillRect(x, y, TILE, 6);
+      g.fillStyle = th.platGlow; g.fillRect(x, y, TILE, 2);
+      g.fillStyle = 'rgba(0,0,0,.28)'; g.fillRect(x, y + TILE - 3, TILE, 3);
+    } else if (c === 'F') {
+      const pulse = 0.5 + 0.5 * Math.sin(t * 0.12);
+      g.fillStyle = '#123a52'; g.fillRect(x, y, TILE, TILE);
+      g.fillStyle = `rgba(110,235,255,${0.35 + pulse * 0.45})`; g.fillRect(x, y, TILE, 6);
+      g.strokeStyle = `rgba(140,240,255,${0.6 + pulse * 0.4})`; g.lineWidth = 2;
+      g.beginPath(); g.arc(x + 16, y + 16, 9 + pulse * 2, 0, 7); g.stroke();
+      g.fillStyle = '#bff6ff';
+      g.beginPath(); g.moveTo(x + 16, y + 10); g.lineTo(x + 21, y + 18); g.lineTo(x + 11, y + 18); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(x + 16, y + 22); g.lineTo(x + 21, y + 14); g.lineTo(x + 11, y + 14); g.closePath(); g.fill();
+    } else if (c === '^') {
+      g.fillStyle = th.spike;
+      for (let i = 0; i < 3; i++) {
+        g.beginPath();
+        g.moveTo(x + i * 11 + 0.5, y + TILE);
+        g.lineTo(x + i * 11 + 5.5, y + 6);
+        g.lineTo(x + i * 11 + 11, y + TILE);
+        g.closePath(); g.fill();
+      }
+      g.fillStyle = 'rgba(255,255,255,.28)';
+      for (let i = 0; i < 3; i++) { g.beginPath(); g.moveTo(x + i * 11 + 5.5, y + 6); g.lineTo(x + i * 11 + 8, y + TILE); g.lineTo(x + i * 11 + 3, y + TILE); g.closePath(); g.fill(); }
+    } else if (c === '*') {
+      drawStar(g, x + 16, y + 16 + Math.sin(t * 0.06 + tx) * 2.5, 8, t * 0.035 + tx, '#ffe07a', '#ffc74d');
+    } else if (c === 'S') {
+      const pulse = 1 + Math.sin(t * 0.09) * 0.09;
+      g.save(); g.shadowColor = '#fff3b0'; g.shadowBlur = 26;
+      drawStar(g, x + 16, y + 16, 15 * pulse, t * 0.028, '#fff6c2', '#ffd447');
+      g.restore();
+      drawStar(g, x + 16, y + 16, 7, -t * 0.04, '#ffd447', null);
+    } else if (c === 'R') {
+      // 彩虹星：色相随时间流转，比力量星更醒目
+      const bob = Math.sin(t * 0.07 + tx) * 3;
+      const hue = (t * 1.6 + tx * 24) % 360;
+      g.save(); g.shadowColor = `hsl(${hue},100%,70%)`; g.shadowBlur = 22;
+      drawStar(g, x + 16, y + 16 + bob, 11, t * 0.05 + tx, `hsl(${hue},100%,78%)`, `hsl(${hue},100%,60%)`);
+      g.restore();
+      drawStar(g, x + 16, y + 16 + bob, 5.5, -t * 0.06, '#ffffff', null);
+    }
+  }
+
+  // ---- 移动平台 ----
+  for (const m of game.movers) {
+    g.fillStyle = th.plat[0]; g.fillRect(m.x, m.y, m.w, m.h);
+    g.fillStyle = th.plat[1]; g.fillRect(m.x, m.y, m.w, 4);
+    g.fillStyle = th.platGlow; g.fillRect(m.x, m.y, m.w, 2);
+    g.fillStyle = '#16244a'; g.fillRect(m.x, m.y + m.h - 3, m.w, 3);
+    g.fillStyle = 'rgba(255,220,120,.85)';
+    for (let i = 0; i < 3; i++) {
+      g.beginPath(); g.arc(m.x + 16 + i * 32, m.y + m.h / 2, 2.6 + Math.sin(t * 0.15 + i) * 0.8, 0, 7); g.fill();
+    }
+  }
+
+  // ---- 敌人 ----
+  for (const e of game.enemies) {
+    if (e.dead && e.squash <= 0) continue;
+    g.save();
+    if (e.dead) { g.translate(e.x + e.w / 2, e.y + e.h); g.scale(1.35, 0.3); g.translate(-e.w / 2, -e.h); }
+    else g.translate(e.x, e.y);
+    const wob = Math.sin(e.anim * 0.14) * 2;
+    g.fillStyle = '#6b3fa0';
+    g.beginPath();
+    g.moveTo(2 + wob, 24); g.lineTo(2, 10);
+    g.quadraticCurveTo(13, -3, 24, 10); g.lineTo(24 + wob, 24); g.closePath(); g.fill();
+    g.fillStyle = '#8b57c9'; g.beginPath(); g.ellipse(13, 11, 12, 9, 0, Math.PI, 0); g.fill();
+    g.fillStyle = '#1a1030';
+    g.beginPath(); g.arc(9, 13, 3.1, 0, 7); g.fill();
+    g.beginPath(); g.arc(18, 13, 3.1, 0, 7); g.fill();
+    g.fillStyle = '#fff';
+    g.beginPath(); g.arc(10, 12, 1.1, 0, 7); g.fill();
+    g.beginPath(); g.arc(19, 12, 1.1, 0, 7); g.fill();
+    g.fillStyle = '#3b2160';
+    g.fillRect(4, 22, 7, 4); g.fillRect(16, 22, 7, 4);
+    g.restore();
+  }
+
+  // ---- 玩家 ----
+  const p = game.player;
+  if (p && p.rainbow > 0) {
+    // 彩蛋特效：彩虹拖尾（留下最近若干帧的色相残影）
+    g.save();
+    for (let i = 0; i < 7; i++) {
+      const k = i / 7;
+      g.globalAlpha = 0.30 * (1 - k);
+      g.fillStyle = `hsl(${(game.frame * 5 + i * 46) % 360},100%,66%)`;
+      const rr = 12 + i * 3;
+      g.beginPath(); g.arc(p.x + p.w / 2 - p.vx * i * 2.2, p.y + p.h / 2 - p.vy * i * 1.4, rr, 0, 7); g.fill();
+    }
+    g.restore();
+  }
+  if (p && !p.dead) {
+    g.save();
+    const cx = p.x + p.w / 2, cy = p.y + p.h / 2;
+    g.translate(cx, cy);
+    if (p.gravity === -1) g.scale(1, -1);
+    if (p.spin > 0) g.rotate(game.frame * 0.55);
+    if (p.invuln > 0 && Math.floor(p.invuln / 5) % 2 === 0) g.globalAlpha = 0.42;
+    const run = Math.abs(p.vx) > 0.4 && p.onGround;
+    const sw = run ? Math.sin(p.anim * 0.35) * 3 : 0;
+    drawMarioSprite(g, sw, p.face);   // 与结算画面共用同一套像素绘制
+    g.restore();
+
+    if (p.spin > 0) {
+      g.save();
+      g.strokeStyle = `rgba(160,235,255,${0.35 + 0.35 * Math.sin(game.frame * 0.4)})`;
+      g.lineWidth = 3;
+      g.beginPath(); g.arc(p.x + p.w / 2, p.y + p.h / 2, 24, game.frame * 0.3, game.frame * 0.3 + 4.2); g.stroke();
+      g.restore();
+    }
+  } else if (p && p.dead) {
+    g.save();
+    g.fillStyle = 'rgba(255,150,120,.85)';
+    const k = (DEATH_TIME - game.deathTimer) / DEATH_TIME;
+    g.beginPath(); g.arc(p.x + p.w / 2, p.y + p.h / 2 - k * 40, 8 + k * 10, 0, 7); g.fill();
+    g.restore();
+  }
+
+  // ---- 粒子 ----
+  for (const q of game.particles) {
+    g.globalAlpha = Math.max(0, Math.min(1, q.life / 30));
+    g.fillStyle = q.c; g.beginPath(); g.arc(q.x, q.y, 2.6, 0, 7); g.fill();
+  }
+  g.globalAlpha = 1;
+
+  // ---- 浮字 ----
+  g.font = 'bold 13px "PingFang SC", sans-serif'; g.textAlign = 'center';
+  for (const f of game.floats) {
+    g.globalAlpha = Math.max(0, f.life / 46);
+    g.fillStyle = f.c; g.fillText(f.t, f.x, f.y);
+  }
+  g.globalAlpha = 1; g.textAlign = 'left';
+
+  g.restore();
+
+  drawAmbient(g, th, t);
+
+  drawHUD(g);
+}
+
+function drawHUD(g) {
+  const p = game.player, W = VIEW_W, th = game.theme;
+  const wide = W >= 980;
+  g.fillStyle = 'rgba(6,10,26,.62)';
+  g.fillRect(0, 0, W, 44);
+  g.fillStyle = 'rgba(130,180,255,.25)'; g.fillRect(0, 44, W, 1);
+  g.textBaseline = 'middle';
+
+  // ---- 左段：星星币 + 关卡名 ----
+  g.font = 'bold 17px "PingFang SC", sans-serif'; g.textAlign = 'left';
+  g.fillStyle = '#ffd86b';
+  const bitTxt = `★ ${game.bits}/${game.bitsTotal}`;
+  g.fillText(bitTxt, 16, 22);
+  let lx = 16 + g.measureText(bitTxt).width + 16;
+  g.fillStyle = '#7fe8ff';
+  const lvName = wide ? game.name : `第${game.levelIdx + 1}关`;
+  g.fillText(lvName, lx, 22);
+  lx += g.measureText(lvName).width + 14;
+  // 彩蛋计数：找到第一颗彩虹星后才显示，避免一上来就剧透
+  if (game.rainbow > 0) {
+    g.font = 'bold 14px "PingFang SC", sans-serif';
+    g.fillStyle = `hsl(${(game.frame * 2) % 360},100%,72%)`;
+    const rbTxt = `🌈${game.rainbow}/${RAINBOW_TOTAL}`;
+    g.fillText(rbTxt, lx, 22);
+    lx += g.measureText(rbTxt).width + 14;
+  }
+
+  // ---- 右段：时间 / 得分 / 生命（从右往左自适应排布，永不重叠）----
+  g.textAlign = 'right';
+  let rx = W - 14;
+  const tm = Math.max(0, Math.floor(game.time));
+  const timeTxt = `⏱ ${String(Math.floor(tm / 60)).padStart(2, '0')}:${String(tm % 60).padStart(2, '0')}`;
+  g.fillStyle = tm < 30 ? (Math.floor(game.frame / 20) % 2 ? '#ff6b6b' : '#ffb0b0') : '#9fe8a0';
+  g.fillText(timeTxt, rx, 22); rx -= g.measureText(timeTxt).width + 16;
+  const scTxt = `得分 ${game.score}`;
+  g.fillStyle = '#c9a2ff'; g.fillText(scTxt, rx, 22); rx -= g.measureText(scTxt).width + 16;
+  const lifeTxt = `♥ ${Math.max(0, game.lives)}`;
+  g.fillStyle = '#fff'; g.fillText(lifeTxt, rx, 22);
+  const rightStart = rx - g.measureText(lifeTxt).width - 18;
+  g.textAlign = 'left';
+
+  // ---- 中段：重力指示 + 当前 BGM（按剩余空间自动取舍）----
+  if (p) {
+    const gy = 22, gw = 74;
+    const gx = lx;
+    g.fillStyle = 'rgba(120,180,255,.18)'; g.fillRect(gx, gy - 10, gw, 20);
+    g.fillStyle = p.gravity === 1 ? '#7fe8ff' : '#ffb0f0';
+    g.font = 'bold 12px "PingFang SC", sans-serif';
+    g.fillText(p.gravity === 1 ? '重力 ↓ 正常' : '重力 ↑ 反转', gx + 6, gy + 1);
+    if (p.flipCd > 0) {
+      g.fillStyle = 'rgba(255,255,255,.25)';
+      g.fillRect(gx, gy + 9, gw * (1 - p.flipCd / FLIP_CD), 2);
+    }
+    if (th) {
+      g.font = '13px "PingFang SC", sans-serif';
+      const bx = gx + gw + 10, room = rightStart - bx;
+      const full = `♪ ${th.bgm}`, off = '♪ 音乐已关';
+      const txt = Music.isOn() ? full : off;
+      g.fillStyle = Music.isOn() ? '#ffd86b' : 'rgba(200,210,235,.45)';
+      if (room >= g.measureText(txt).width + 6) g.fillText(txt, bx, 22);
+      else if (room >= 22) g.fillText('♪', bx, 22);
+    }
+  }
+
+  // ---- 关卡开场横幅（同时提示本关 BGM）----
+  if (game.intro > 0 && th) {
+    const k = game.intro / 170;
+    const a = k > 0.85 ? (1 - k) / 0.15 : Math.min(1, k / 0.25);
+    g.globalAlpha = Math.max(0, Math.min(1, a));
+    const bh = 96, by = VIEW_H / 2 - bh / 2;
+    g.fillStyle = 'rgba(4,7,22,.72)';
+    g.fillRect(0, by, VIEW_W, bh);
+    g.fillStyle = th.platGlow;
+    g.fillRect(0, by, VIEW_W, 2); g.fillRect(0, by + bh - 2, VIEW_W, 2);
+    g.textAlign = 'center';
+    g.fillStyle = '#ffd86b'; g.font = `bold ${Math.min(30, W / 16)}px "PingFang SC", sans-serif`;
+    g.fillText(game.name, W / 2, by + 38);
+    g.fillStyle = '#cfe0ff'; g.font = '15px "PingFang SC", sans-serif';
+    g.fillText(`♪ BGM：${th.bgm}`, W / 2, by + 70);
+    g.textAlign = 'left'; g.globalAlpha = 1;
+  }
+
+  if (game.levelIdx === 0 && game.frame < 420 && game.state === 'playing') {
+    g.globalAlpha = game.frame < 340 ? 1 : (420 - game.frame) / 80;
+    const tipW = Math.min(560, W - 24);
+    g.fillStyle = 'rgba(8,14,34,.78)';
+    g.fillRect(W / 2 - tipW / 2, VIEW_H - 66, tipW, 40);
+    g.fillStyle = '#cfe0ff'; g.font = '13px "PingFang SC", sans-serif'; g.textAlign = 'center';
+    g.fillText(touchMode
+      ? '左下 ◀▶ 移动 ｜ 右下 ▲ 跳跃、⇅ 翻转重力、✦ 旋转攻击'
+      : '← → 移动 ｜ 空格 跳跃 ｜ K 重力 ｜ J 旋转 ｜ M 音乐 ｜ R 重来 ｜ Esc 暂停',
+      W / 2, VIEW_H - 46);
+    g.textAlign = 'left'; g.globalAlpha = 1;
+  }
+
+  if (game.toastT > 0) {
+    g.globalAlpha = Math.min(1, game.toastT / 30);
+    g.fillStyle = 'rgba(8,14,34,.8)'; g.fillRect(W / 2 - 90, 58, 180, 30);
+    g.fillStyle = '#cfe0ff'; g.font = '13px "PingFang SC", sans-serif'; g.textAlign = 'center';
+    g.fillText(game.toast, W / 2, 74);
+    g.textAlign = 'left'; g.globalAlpha = 1;
+  }
+  if (game.state === 'paused') {
+    g.fillStyle = 'rgba(4,7,22,.7)'; g.fillRect(0, 0, W, VIEW_H);
+    g.fillStyle = '#fff'; g.font = 'bold 34px "PingFang SC", sans-serif'; g.textAlign = 'center';
+    g.fillText('暂停', W / 2, VIEW_H / 2);
+    g.font = '14px "PingFang SC", sans-serif'; g.fillStyle = '#9fc0ff';
+    g.fillText('按 Esc 继续', W / 2, VIEW_H / 2 + 30);
+    g.textAlign = 'left';
+  }
+}
+
+/* =========================================================
+   结算画面 · 双角色庆祝动画（王子马力欧 × 公主碧姬）
+   ---------------------------------------------------------
+   · 触发时机 / 持续时长 / 出场顺序 —— 全部显式声明于 CELEB_TL.cues
+   · 逐帧 Canvas 绘制，与游戏内角色共用 drawMarioSprite / drawPeachSprite，
+     风格与比例 100% 一致（同一份绘制代码）
+   · 由主循环 frame() 驱动；overlay 关闭时不消耗任何开销
+   · 提供 seek(ms) 把演出精确定位到任意时刻，便于自动化验收与定点截图
+   ========================================================= */
+const CELEB_TL = {
+  stage:  { w: 480, h: 280 },   // 舞台逻辑尺寸
+  scale:  5,                    // 角色像素放大倍数
+  ground: 174,                  // 角色「视觉中心」的静止高度
+  marioX: 138, peachX: 342,     // 两人的视觉中心 x
+  cues: [
+    { who: 'mario', act: 'enter', at:    0, dur:  700, note: '王子·马力欧自左侧滑入登场' },
+    { who: 'peach', act: 'enter', at:  420, dur:  700, note: '公主·碧姬随后自右侧滑入' },
+    { who: 'both',  act: 'cheer', at: 1250, dur:  800, note: '双人同时跃起欢呼' },
+    { who: 'spark', act: 'burst', at: 1250, dur: 1600, note: '星光迸发撒花' },
+    { who: 'both',  act: 'idle',  at: 2100, dur:    0, note: '转入无限待机循环（dur=0 表示无限）' },
+  ],
+};
+
+const CELEB = (() => {
+  const cv = document.getElementById('ovCv');
+  const S = CELEB_TL.stage;
+  cv.width = S.w; cv.height = S.h;      // 画布分辨率始终跟随舞台定义，杜绝两处不同步
+  const cg = cv.getContext('2d');
+  const cue = (who, act) => CELEB_TL.cues.find(c => c.who === who && c.act === act);
+  const ENT_M = cue('mario', 'enter'), ENT_P = cue('peach', 'enter');
+  const CHEER = cue('both', 'cheer'),  BURST = cue('spark', 'burst'), IDLE = cue('both', 'idle');
+  const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+  const easeOutCubic = p => 1 - Math.pow(1 - p, 3);
+  const FOOT = CELEB_TL.ground + 12 * CELEB_TL.scale;   // 脚底所在 y
+
+  let running = false, t0 = 0, sparks = [], burstFired = false, lastMs = -1;
+
+  /* 单角色姿态解算：出场顺序与各阶段时长完全由 cues 决定 */
+  function pose(who, ms) {
+    const ent  = who === 'mario' ? ENT_M : ENT_P;
+    const baseX = who === 'mario' ? CELEB_TL.marioX : CELEB_TL.peachX;
+    const from = who === 'mario' ? -1 : 1;   // 王子从左侧进场，公主从右侧进场
+    const face = who === 'mario' ? 1 : -1;   // 两人相向而立
+    let x = baseX, y = CELEB_TL.ground, sw = 0, alpha = 1, sq = 1;
+
+    if (ms < ent.at) return { x, y, sw: 0, alpha: 0, sq: 1, face, on: false };  // 尚未出场
+
+    const ep = clamp01((ms - ent.at) / ent.dur);
+    if (ep < 1) {                                              // ① 入场：滑行 + 落地余振
+      const e = easeOutCubic(ep);
+      x = baseX + from * (1 - e) * 190;
+      alpha = clamp01(ep * 2.4);
+      sw = Math.sin(ep * Math.PI * 5.5) * 3.4;
+      y -= Math.abs(Math.sin(ep * Math.PI * 1.7)) * (1 - ep) * 12;
+    }
+    const cp = clamp01((ms - CHEER.at) / CHEER.dur);
+    if (ms >= CHEER.at && cp <= 1) {                           // ② 欢呼跳跃（王子跳更高）
+      const hop = who === 'mario' ? 50 : 38;
+      y -= Math.sin(cp * Math.PI) * hop;
+      sw = Math.sin(cp * Math.PI * 2) * 4.5;
+      if (cp > 0.85) sq = 1 - Math.sin((cp - 0.85) / 0.15 * Math.PI) * 0.12;  // 落地压扁
+    }
+    if (ms >= IDLE.at) {                                       // ③ 无限待机：漂浮 + 微摆
+      const it = ms - IDLE.at;
+      y += Math.sin(it * 0.0042 + (who === 'mario' ? 0 : 1.9)) * 4;
+      sw = Math.sin(it * 0.0042) * 0.8;
+    }
+    return { x, y, sw, alpha, sq, face, on: true };
+  }
+
+  function spawnAndStep(ms) {
+    if (ms >= BURST.at && !burstFired) {                       // 星光迸发（一次）
+      burstFired = true;
+      const cx = (CELEB_TL.marioX + CELEB_TL.peachX) / 2, cy = CELEB_TL.ground - 30;
+      for (let i = 0; i < 42; i++) {
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.9;
+        const sp = 2.0 + Math.random() * 5.0;
+        sparks.push({ x: cx + (Math.random() - 0.5) * 60, y: cy + (Math.random() - 0.5) * 30,
+                      vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+                      life: 55 + Math.random() * 70,
+                      r: 3.5 + Math.random() * 5, rot: Math.random() * 6.3, vr: (Math.random() - 0.5) * 0.3,
+                      hue: Math.random() * 360 });
+      }
+    }
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const s = sparks[i];
+      s.x += s.vx; s.y += s.vy; s.vy += 0.11; s.vx *= 0.986; s.rot += s.vr; s.life--;
+      if (s.life <= 0) sparks.splice(i, 1);
+    }
+  }
+
+  function drawRole(who, ms) {
+    const q = pose(who, ms);
+    if (!q.on || q.alpha <= 0.01) return;
+    const lift = Math.max(0, CELEB_TL.ground - q.y);
+    // 影子：离地越高越淡越小
+    cg.save();
+    cg.globalAlpha = 0.34 * q.alpha * (1 - Math.min(0.7, lift / 90));
+    cg.fillStyle = '#020409';
+    cg.beginPath();
+    cg.ellipse(q.x, FOOT + 4, 46 * (1 - Math.min(0.45, lift / 150)), 8.5, 0, 0, 7);
+    cg.fill();
+    cg.restore();
+    // 本体（复用游戏同一套像素绘制）
+    cg.save();
+    cg.globalAlpha = q.alpha;
+    // 视觉居中补偿：绘制原点相对角色本体固有偏移 10px（与游戏内一致）
+    cg.translate(q.x + (q.face > 0 ? 9 : -11), q.y);
+    cg.scale(CELEB_TL.scale, CELEB_TL.scale * q.sq);
+    if (who === 'mario') drawMarioSprite(cg, q.sw, q.face);
+    else                 drawPeachSprite(cg, q.sw, q.face, ms);
+    cg.restore();
+    // 名牌：入场完成后浮现
+    if (ms >= (who === 'mario' ? ENT_M : ENT_P).at + 300) {
+      cg.save();
+      cg.globalAlpha = q.alpha * 0.95;
+      cg.font = 'bold 20px "PingFang SC","Microsoft YaHei",sans-serif';
+      cg.textAlign = 'center';
+      cg.fillStyle = who === 'mario' ? '#ffd86b' : '#ffb8dd';
+      cg.fillText(who === 'mario' ? '王子 · 马力欧' : '公主 · 碧姬', q.x, S.h - 14);
+      cg.restore();
+    }
+  }
+
+  function draw(ms) {
+    cg.setTransform(1, 0, 0, 1, 0, 0);
+    cg.clearRect(0, 0, S.w, S.h);
+    // 角色身后的柔光：跟随两人位置，边缘自然收束（不铺满画布，避免出现矩形亮底）
+    for (const who of ['mario', 'peach']) {
+      const q = pose(who, ms);
+      if (!q.on) continue;
+      const rg = cg.createRadialGradient(q.x, q.y - 8, 6, q.x, q.y - 8, 104);
+      rg.addColorStop(0, who === 'mario' ? 'rgba(255,182,120,.20)' : 'rgba(255,168,216,.22)');
+      rg.addColorStop(1, 'rgba(255,180,150,0)');
+      cg.fillStyle = rg;
+      cg.beginPath(); cg.arc(q.x, q.y - 8, 104, 0, 7); cg.fill();
+    }
+    // 地面柔光（椭圆光斑，避免生硬横条）
+    const lg = cg.createRadialGradient(S.w / 2, FOOT + 10, 6, S.w / 2, FOOT + 10, S.w * 0.46);
+    lg.addColorStop(0, 'rgba(255,214,107,.30)');
+    lg.addColorStop(0.55, 'rgba(255,178,90,.12)');
+    lg.addColorStop(1, 'rgba(255,178,90,0)');
+    cg.fillStyle = lg;
+    cg.beginPath(); cg.ellipse(S.w / 2, FOOT + 10, S.w * 0.48, 34, 0, 0, 7); cg.fill();
+    // 角色：王子先出、公主后出（先后由 cues 的 at 决定）
+    drawRole('mario', ms);
+    drawRole('peach', ms);
+    // 星光粒子
+    for (const s of sparks) {
+      cg.save();
+      cg.globalAlpha = clamp01(s.life / 45) * 0.95;
+      drawStar(cg, s.x, s.y, s.r, s.rot, `hsl(${s.hue},100%,78%)`, `hsl(${s.hue},100%,62%)`);
+      cg.restore();
+    }
+  }
+
+  function reset() { sparks = []; burstFired = false; lastMs = -1; }
+  function start() { reset(); t0 = performance.now(); running = true; draw(0); }
+  function stop()  { running = false; }
+  function tick(now) {
+    if (!running) return;
+    const ms = now - t0;
+    spawnAndStep(ms);
+    draw(ms);
+    lastMs = ms;
+  }
+  /* 自动化验收用：把演出精确定位到 ms 时刻并绘制一帧（不依赖真实时钟） */
+  function seek(ms) {
+    reset();
+    const steps = Math.round(ms / 16.7);
+    for (let i = 0; i <= steps; i++) spawnAndStep(i * 16.7);
+    // 用定位时刻重新同步粒子（让粒子处于合理位置）
+    draw(ms);
+    lastMs = ms;
+    return { ms, mario: pose('mario', ms), peach: pose('peach', ms), sparks: sparks.length };
+  }
+
+  return {
+    TL: CELEB_TL, start, stop, tick, seek, pose, reset,
+    isRunning: () => running, sparkCount: () => sparks.length, last: () => lastMs,
+  };
+})();
+
+// ---------------- 面板 ----------------
+const overlay = document.getElementById('overlay');
+const ovText = document.getElementById('ovText');
+const ovBtn = document.getElementById('ovBtn');
+const ovCast = document.getElementById('ovCast');
+let ovAction = null;
+/* opts.cast = true 时展开双角色庆祝舞台并启动动画 */
+function showOverlay(html, btn, action, opts) {
+  ovText.innerHTML = html; ovBtn.textContent = btn; ovAction = action;
+  const cast = !!(opts && opts.cast);
+  ovCast.classList.toggle('hidden', !cast);
+  if (cast) CELEB.start(); else CELEB.stop();
+  overlay.classList.remove('hidden');
+}
+function hideOverlay() {
+  overlay.classList.add('hidden');
+  ovCast.classList.add('hidden');   // 一并收起角色舞台，避免残留状态
+  CELEB.stop();
+}
+ovBtn.addEventListener('click', () => { Sfx.unlock(); if (ovAction) ovAction(); });
+
+const CONTROLS_HTML = `
+  <b>操作</b><br>
+  <span class="key">←</span><span class="key">→</span> / <span class="key">A</span><span class="key">D</span> 移动　
+  <span class="key">空格</span> 跳跃（长按跳更高）<br>
+  <span class="key">K</span> 翻转重力　<span class="key">J</span> 旋转攻击　<span class="key">M</span> 背景音乐　<span class="key">R</span> 重来　<span class="key">Esc</span> 暂停<br>
+  <b>目标</b><br>
+  收集星星币，踩扁宇宙栗子怪，避开尖刺与深坑，<br>
+  踏上 <b style="color:#7fe8ff">⇅ 重力板</b> 天地颠倒，走到尽头夺取 <b>力量星</b>！
+  <br><b>六座星球 · 难度递进</b><br>
+  ❄️ <span style="color:#a8d8f0">冰天雪地</span> · 飘雪极光　
+  🌋 <span style="color:#ff8a3a">火炉山</span> · 熔岩火星　
+  🌿 <span style="color:#8fd86a">热带雨林</span> · 浮空花粉<br>
+  🏜️ <span style="color:#e0c060">沙漠古城</span> · 狂风走沙　
+  🌊 <span style="color:#5ab0e0">幽蓝深海</span> · 气泡上浮　
+  ⛈️ <span style="color:#b0a8d0">雷暴云海</span> · 电闪暴雨<br>
+  <span style="color:#9fc0ff;font-size:.92em">每关有专属背景与 BGM，戴上耳机效果更佳</span><br>
+  <span style="color:#ffd86b;font-size:.92em">🌈 每关都藏着一颗彩虹星 —— 有时得翻到天花板上才找得到</span>`;
+
+function showTitle() {
+  game.state = 'title';
+  game.theme = THEMES[0]; game.levelIdx = 0;
+  Music.stop();
+  showOverlay(
+    `<div class="subtitle">SUPER MARIO GALAXY · MOVIE MINI GAME</div>
+     <div class="title">超级马力欧银河</div>
+     <div class="card">${CONTROLS_HTML}</div>`,
+    '开始冒险', () => { game.score = 0; game.totalStars = 0; game.lives = 3; game.rainbow = 0; startLevel(0); });
+}
+function togglePause() {
+  if (game.state === 'playing') { game.prevState = 'playing'; game.state = 'paused'; Audio2.duck(true); }
+  else if (game.state === 'paused') { game.state = game.prevState || 'playing'; Audio2.duck(false); }
+}
+function toast(msg) { game.toast = msg; game.toastT = 90; }
+
+// ---------------- 主循环 ----------------
+let acc = 0, last = performance.now();
+function frame(now) {
+  let dt = (now - last) / 1000; last = now;
+  if (dt > 0.25) dt = 0.25;
+  if (!game.manual) {
+    acc += dt;
+    let guard = 0;
+    while (acc >= STEP && guard++ < 6) { step(); acc -= STEP; }
+  }
+  render();
+  CELEB.tick(now);          // 结算画面双角色庆祝动画（未启动时零开销）
+  requestAnimationFrame(frame);
+}
+
+// =========================================================
+// 测试钩子
+// =========================================================
+window.__G = {
+  game, LEVELS, LEVEL_TIME, THEMES, Music, Sfx, bgFor,
+  RAINBOW_TOTAL, KONAMI, feedKonami, triggerKonami,
+  cfg: { TILE, ROWS, VIEW_W, VIEW_H, GRAV, JUMP_V, RUN_MAX, MAX_FALL },
+  start(i, opts) { game.manual = true; startLevel(i, opts); },
+  advance(n) { for (let i = 0; i < n; i++) step(); },
+  key(name, down) { setKey(name, down); },
+  tapKey(name) { setKey(name, true); step(); setKey(name, false); },
+  flip() { return flipGravity(true); },
+  isSolid, aabb,
+  setPlayer(o) { Object.assign(game.player, o); },
+  addEnemy(x, y) { const e = makeEnemy(x, y); game.enemies.push(e); return e; },
+  clearEnemies() { game.enemies.length = 0; },
+  clearMovers() { game.movers.length = 0; },
+  movers() { return game.movers; },
+  firstMover() { return game.movers[0]; },
+  // 把环境天气层单独画到离屏画布上，用于自检它确实被绘制且在运动
+  ambientProbe(t) {
+    const c = document.createElement('canvas'); c.width = VIEW_W; c.height = VIEW_H;
+    const g = c.getContext('2d');
+    drawAmbient(g, game.theme, t);
+    const d = g.getImageData(0, 0, VIEW_W, VIEW_H).data;
+    let n = 0, sig = 0;
+    for (let k = 3; k < d.length; k += 4 * 3) { if (d[k] > 8) n++; sig = (sig * 33 + d[k] + k) >>> 0; }
+    return { n, sig };
+  },
+  tileAt(x, y) { return (game.tiles[y] && game.tiles[y][x]) || '.'; },
+  setTile(x, y, c) { game.tiles[y][x] = c; },
+  // —— 结算画面双角色庆祝动画（供自动化验收使用）——
+  CELEB, CELEB_TL, showOverlay, hideOverlay,
+  celebSeek(ms) { return CELEB.seek(ms); },          // 把演出精确定位到 ms 时刻并绘制一帧
+  winNow() { game.levelIdx = LEVELS.length - 1; clearLevel(); }   // 直接跳到最终结算画面
+};
+
+// =========================================================
+// 页面内自检（?test=1）
+// =========================================================
+function runSelfTest() {
+  // 固定随机种子，保证自检结果可复现
+  let __seed = 20260831;
+  Math.random = () => (__seed = (__seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+
+  const R = [];
+  const ok = (name, cond, info) => R.push({ name, pass: !!cond, info: info || '' });
+  const G = window.__G;
+
+  // T1 关卡数据
+  let dataOk = G.LEVELS.length === 6, wOk = true, hasPS = true, hasRainbow = true;
+  G.LEVELS.forEach(L => {
+    if (L.rows.length !== ROWS) dataOk = false;
+    L.rows.forEach(r => { if (r.length !== L.w) wOk = false; });
+    const s = L.rows.join('');
+    if (s.indexOf('P') < 0 || s.indexOf('S') < 0) hasPS = false;
+    if ((s.match(/R/g) || []).length !== 1) hasRainbow = false;   // 每关恰好一颗彩虹星
+  });
+  ok('T1 关卡数据结构合法（6关/17行/等宽/含出生点、力量星、每关一颗彩虹星）',
+     dataOk && wOk && hasPS && hasRainbow);
+
+  // T2 出生点不卡墙 + 起点可站立
+  G.start(0, { lives: 3 });
+  G.advance(60);
+  const p = G.game.player;
+  ok('T2 出生后能稳定站在地面上（不穿墙、不下坠）',
+     !p.dead && p.onGround && Math.abs(p.vy) < 0.01, `onGround=${p.onGround} y=${p.y.toFixed(1)}`);
+
+  // T3 跳跃高度
+  const y0 = p.y;
+  G.key('jump', true);
+  let minY = y0;
+  for (let i = 0; i < 60; i++) { G.advance(1); minY = Math.min(minY, G.game.player.y); }
+  G.key('jump', false);
+  const h = y0 - minY;
+  ok('T3 跳跃高度在设计区间 120~165px', h > 120 && h < 165, `实测 ${h.toFixed(1)}px`);
+
+  // T4 水平移动与撞墙
+  G.start(0, { lives: 3 }); G.advance(30);
+  const x0 = G.game.player.x;
+  G.key('right', true); G.advance(60); G.key('right', false);
+  const moved = G.game.player.x - x0;
+  ok('T4 水平移动生效', moved > 100, `位移 ${moved.toFixed(1)}px`);
+  const maxRun = Math.abs(G.game.player.vx);
+  ok('T4b 水平速度不超过上限', maxRun <= G.cfg.RUN_MAX + 0.01, `vx=${maxRun.toFixed(2)}`);
+
+  G.start(0, { lives: 3 }); G.advance(30);
+  G.setPlayer({ x: 2 * TILE + 4, y: 15 * TILE + 4 });
+  G.key('left', true); G.advance(60); G.key('left', false);
+  ok('T4c 左侧边墙阻挡（不会穿出关卡）', G.game.player.x >= TILE, `x=${G.game.player.x.toFixed(1)}`);
+
+  // T5 重力翻转 + 吸附天花板
+  G.start(0, { lives: 3 });
+  G.setPlayer({ x: 30 * TILE + 6, y: 6 * TILE, vx: 0, vy: 0, gravity: 1 });
+  G.flip();
+  G.advance(150);
+  const p5 = G.game.player;
+  ok('T5 重力翻转后吸附到天花板下方（y=64）',
+     p5.gravity === -1 && Math.abs(p5.y - 64) < 1.5 && p5.onGround,
+     `gravity=${p5.gravity} y=${p5.y.toFixed(1)} onGround=${p5.onGround}`);
+
+  // T6 踩踏敌人（选一个上方无平台、下方是实地的空列 x=22）
+  G.start(0, { lives: 3 });
+  G.clearEnemies(); G.clearMovers();
+  const e6 = G.addEnemy(22 * TILE, 15 * TILE + 8);
+  const lives6 = G.game.lives;
+  G.setPlayer({ x: 22 * TILE + 4, y: 12 * TILE, gravity: 1, vy: 6, invuln: 0 });
+  let stomped = false;
+  for (let i = 0; i < 40 && !stomped; i++) { G.advance(1); if (e6.dead) stomped = true; }
+  ok('T6 从上方落下可踩扁敌人且不掉命',
+     stomped && G.game.lives === lives6 && G.game.player.vy < 0,
+     `dead=${e6.dead} lives=${G.game.lives} vy=${G.game.player.vy.toFixed(1)}`);
+
+  // T7 侧面撞敌人 → 掉命
+  G.start(0, { lives: 3 });
+  G.clearEnemies(); G.clearMovers();
+  const e7 = G.addEnemy(22 * TILE + 40, 15 * TILE + 8);
+  e7.vx = 0;
+  G.setPlayer({ x: 22 * TILE + 4, y: 15 * TILE + 4, gravity: 1, vy: 0, invuln: 0 });
+  G.key('right', true); G.advance(45); G.key('right', false);
+  ok('T7 侧面撞到敌人会损失生命',
+     G.game.lives === 2 && (G.game.state === 'dying' || G.game.state === 'gameover'),
+     `lives=${G.game.lives} state=${G.game.state}`);
+
+  // T8 尖刺致死
+  G.start(0, { lives: 3 });
+  G.clearMovers();
+  G.setPlayer({ x: 36 * TILE + 2, y: 14 * TILE + 4, gravity: 1, vy: 4, invuln: 0 });
+  G.advance(40);
+  ok('T8 触碰尖刺会损失生命', G.game.lives === 2, `lives=${G.game.lives} state=${G.game.state}`);
+
+  // T9 掉出关卡致死（站在 18-20 深坑上方）
+  G.start(0, { lives: 3 });
+  G.clearMovers();
+  G.setPlayer({ x: 19 * TILE + 6, y: 15 * TILE, gravity: 1, vy: 2, invuln: 0 });
+  G.advance(120);
+  ok('T9 掉进深坑会损失生命', G.game.lives === 2, `lives=${G.game.lives} state=${G.game.state}`);
+
+  // T10 收集星星币
+  G.start(0, { lives: 3 });
+  G.clearMovers();
+  const sc10 = G.game.score, b10 = G.game.bits;
+  G.setPlayer({ x: 8 * TILE + 8, y: 12 * TILE + 8, gravity: 1, vy: 0, invuln: 999 });
+  G.advance(4);
+  ok('T10 收集星星币计数与得分增加',
+     G.game.bits === b10 + 1 && G.game.score === sc10 + 100,
+     `bits ${b10}→${G.game.bits} score ${sc10}→${G.game.score}`);
+
+  // T11 力量星 → 过关
+  // 动态定位力量星：关卡布局调整（如把悬空的力量星下移到主路径）后测试不会失效
+  const findStar = () => {
+    for (let y = 0; y < G.cfg.ROWS; y++)
+      for (let x = 0; x < G.game.w; x++) if (G.game.tiles[y][x] === 'S') return { x, y };
+    return null;
+  };
+  G.start(0, { lives: 3 });
+  G.game.totalStars = 0;
+  const star11 = findStar();
+  G.setPlayer({ x: star11.x * TILE + 8, y: star11.y * TILE + 2, gravity: 1, vy: 0, invuln: 999 });
+  G.advance(4);
+  ok('T11 触碰力量星进入过关流程',
+     G.game.state === 'clear' && G.game.totalStars === 1,
+     `state=${G.game.state} stars=${G.game.totalStars}`);
+
+  // T12 移动平台承载（取一台水平移动平台）
+  G.start(0, { lives: 3 });
+  const m = G.movers().filter(q => q.kind === 'h')[0];
+  let carryOk = false, info12 = 'no mover';
+  if (m) {
+    G.setPlayer({ x: m.x + 30, y: m.y - 30, gravity: 1, vx: 0, vy: 1, invuln: 999 });
+    G.advance(6);
+    const before = G.game.player.x, mBefore = m.x;
+    G.advance(30);
+    const dP = G.game.player.x - before, dM = m.x - mBefore;
+    carryOk = Math.abs(dP) > 3 && Math.sign(dP) === Math.sign(dM) && Math.abs(dP - dM) < 6;
+    info12 = `玩家位移 ${dP.toFixed(1)} / 平台位移 ${dM.toFixed(1)}`;
+  }
+  ok('T12 站在移动平台上会被一起带走', carryOk, info12);
+
+  // T13 生命耗尽 → gameover
+  G.start(0, { lives: 1 });
+  G.setPlayer({ x: 19 * TILE + 6, y: 15 * TILE, gravity: 1, vy: 2, invuln: 0 });
+  G.advance(200);
+  ok('T13 生命耗尽进入 GAME OVER', G.game.state === 'gameover', `state=${G.game.state} lives=${G.game.lives}`);
+
+  // T14 通关全部 6 关 → win
+  let winOk = false, info14 = '';
+  try {
+    const N = G.LEVELS.length;
+    G.start(0, { lives: 3 });
+    for (let i = 0; i < N; i++) {
+      G.game.totalStars = i;
+      G.start(i, { lives: 3 });
+      // 直接传送到力量星位置
+      const L = G.LEVELS[i];
+      let sx = -1, sy = -1;
+      for (let y = 0; y < ROWS; y++) { const c = L.rows[y].indexOf('S'); if (c >= 0) { sx = c; sy = y; break; } }
+      G.setPlayer({ x: sx * TILE + 8, y: sy * TILE + 2, gravity: 1, vy: 0, invuln: 999 });
+      G.advance(4);
+      if (i < N - 1 && G.game.state !== 'clear') { info14 = `第${i + 1}关未过关(${G.game.state})`; break; }
+    }
+    winOk = G.game.state === 'win';
+    if (!info14) info14 = `state=${G.game.state}`;
+  } catch (e) { info14 = 'EX ' + e.message; }
+  ok('T14 连续通过全部 6 关触发通关结算', winOk, info14);
+
+  // T15 长时间运行稳定性（无 NaN / 无异常）
+  let stable = true, info15 = '';
+  try {
+    G.start(2, { lives: 99 });
+    const seq = ['right', 'jump', 'flip', 'spin', 'left'];
+    for (let i = 0; i < 2400; i++) {
+      const k = seq[Math.floor(i / 45) % seq.length];
+      if (i % 45 === 0) G.key(k, true);
+      if (i % 45 === 22) G.key(k, false);
+      G.advance(1);
+      const pp = G.game.player;
+      if (!isFinite(pp.x) || !isFinite(pp.y) || !isFinite(pp.vx) || !isFinite(pp.vy)) { stable = false; info15 = `NaN @frame ${i}`; break; }
+    }
+  } catch (e) { stable = false; info15 = 'EX ' + e.message; }
+  ok('T15 连续 2400 帧随机操作无异常、无 NaN', stable, info15);
+
+  // T16 重力板自动翻转
+  G.start(0, { lives: 3 });
+  G.clearMovers();
+  G.setPlayer({ x: 30 * TILE + 6, y: 15 * TILE, gravity: 1, vy: 2, invuln: 999 });
+  G.advance(30);
+  ok('T16 踏上重力板会自动翻转重力', G.game.player.gravity === -1, `gravity=${G.game.player.gravity}`);
+
+  // T17 可玩性：脚本化“玩家”自动试玩第一关，应能跨越深坑 / 天花板路段 / 尖刺
+  let autoMaxX = 0, autoInfo = '';
+  try {
+    __seed = 20260903;                                   // 重置随机种子，让自动试玩结果可复现（不受前面用例消耗影响）
+    G.start(0, { lives: 5 });
+    let jumpHold = 0, spinCd = 0, lastLives = G.game.lives;
+    const deaths = [];
+    for (let i = 0; i < 3000; i++) {
+      const pp = G.game.player, gd = pp.gravity;
+      G.key('right', true);
+      const footTy = Math.floor((gd === 1 ? pp.y + pp.h + 2 : pp.y - 2) / TILE);
+      const aheadX = Math.floor((pp.x + pp.w + 16) / TILE);
+      const bodyTy = Math.floor((pp.y + pp.h / 2) / TILE);
+      const gapAhead = !G.isSolid(aheadX, footTy);
+      const wallAhead = G.isSolid(Math.floor((pp.x + pp.w + 8) / TILE), bodyTy);
+      const spikeAhead = G.tileAt(aheadX, footTy) === '^' || G.tileAt(aheadX, footTy - gd) === '^'
+                      || G.tileAt(aheadX + 1, footTy) === '^' || G.tileAt(aheadX + 1, footTy - gd) === '^';
+      let enemyNear = false;
+      for (const e of G.game.enemies) if (!e.dead && Math.abs(e.x - pp.x) < 48 && Math.abs(e.y - pp.y) < 44) enemyNear = true;
+      if (spinCd > 0) spinCd--;
+      G.key('spin', enemyNear && spinCd <= 0);
+      if (enemyNear && spinCd <= 0) spinCd = 30;
+      if ((gapAhead || wallAhead || spikeAhead) && pp.onGround) jumpHold = 20;
+      if (jumpHold > 0) { G.key('jump', true); jumpHold--; } else G.key('jump', false);
+      const lvBefore = G.game.lives;
+      G.advance(1);
+      if (G.game.lives < lvBefore) {
+        const f = G.game.floats[G.game.floats.length - 1];
+        deaths.push(`x=${pp.x.toFixed(0)} g=${pp.gravity} ${f ? f.t : ''}`);
+      }
+      if (pp.x > autoMaxX) autoMaxX = pp.x;
+    }
+    autoInfo = `最远推进 x=${autoMaxX.toFixed(0)}（关卡宽 ${G.LEVELS[0].w * TILE}）｜剩余生命 ${G.game.lives}｜星星币 ${G.game.bits}｜死亡: ${deaths.join(' / ') || '无'}`;
+  } catch (e) { autoInfo = 'EX ' + e.message; }
+  ok('T17 脚本玩家自动试玩：能跨坑/过天花板/躲尖刺并大幅推进',
+     autoMaxX > 1450 && G.game.lives > 0, autoInfo);
+
+  // T18 每关视觉主题互不相同
+  const sigs = [];
+  let themeOk = true, bgOk = true, visOk = true, info18 = '';
+  try {
+    for (let i = 0; i < G.LEVELS.length; i++) {
+      G.start(i, { lives: 3 });
+      if (G.game.theme !== G.THEMES[i]) themeOk = false;
+      const c = G.bgFor(i);
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      let s = 0;
+      for (let k = 0; k < d.length; k += 4 * 1009) s = (s * 31 + d[k] + d[k + 1] * 3 + d[k + 2] * 7) >>> 0;
+      sigs.push(s);
+    }
+    if (new Set(sigs).size !== sigs.length) bgOk = false;
+    const T = G.THEMES;
+    if (new Set(T.map(t => t.rock.join())).size !== T.length) visOk = false;
+    if (new Set(T.map(t => t.plat.join())).size !== T.length) visOk = false;
+    if (new Set(T.map(t => t.planets[0].c1)).size !== T.length) visOk = false;
+    info18 = `背景指纹 ${sigs.join(' / ')}`;
+  } catch (e) { themeOk = bgOk = visOk = false; info18 = 'EX ' + e.message; }
+  ok('T18 六关视觉主题各不相同（背景/星球/地块配色）', themeOk && bgOk && visOk, info18);
+
+  // T19 每关切换对应 BGM
+  let bgmOk = true, info19 = [];
+  try {
+    const N = G.LEVELS.length;
+    for (let i = 0; i < N; i++) {
+      G.start(i, { lives: 3 });
+      if (G.Music.current() !== i) bgmOk = false;
+      info19.push(`${G.THEMES[i].bpm}bpm`);
+    }
+    const uniqBpm = new Set(G.THEMES.map(t => t.bpm)).size;
+    const uniqChord = new Set(G.THEMES.map(t => JSON.stringify(t.chords))).size;
+    const uniqBass = new Set(G.THEMES.map(t => t.bassWave + t.leadWave)).size;
+    if (uniqBpm !== N || uniqChord !== N || uniqBass !== N) bgmOk = false;
+    info19.push(`速度/和弦/音色唯一性 ${uniqBpm}/${uniqChord}/${uniqBass}`);
+  } catch (e) { bgmOk = false; info19.push('EX ' + e.message); }
+  ok('T19 每关切换各自 BGM（速度/和弦/音色均不同）', bgmOk, info19.join(' ｜ '));
+
+  // T22 每关环境天气层各不相同，且与关卡环境匹配
+  let ambOk = true, ambInfo = [];
+  try {
+    const kinds = G.THEMES.map(t => t.ambient && t.ambient.kind);
+    if (new Set(kinds).size !== G.THEMES.length || kinds.some(k => !k)) ambOk = false;
+    G.THEMES.forEach((t, i) => {
+      ambInfo.push(`${t.name}:${t.ambient.kind}`);
+      if (t.ambient.n < 40 || t.ambient.size <= 0) ambOk = false;
+    });
+    // 环境 → 音乐性格映射：冰原最慢、熔炉最快；雨林摇摆最强；冰原/深海有高八度铃声；雷暴有闷雷
+    const [ICE, FIRE, JUNGLE, DESERT, SEA, STORM] = G.THEMES;
+    if (!(ICE.bpm < JUNGLE.bpm && JUNGLE.bpm < FIRE.bpm)) ambOk = false;
+    if (!(JUNGLE.swing > FIRE.swing && FIRE.swing > ICE.swing)) ambOk = false;
+    if (!(ICE.bell && !FIRE.bell && JUNGLE.bell && DESERT.bell && SEA.bell && !STORM.bell)) ambOk = false;
+    if (!(FIRE.tom && STORM.tom && !ICE.tom)) ambOk = false;
+    if (!(ICE.leadOct > 0 && SEA.leadOct > 0 && FIRE.leadOct === 0 && JUNGLE.leadOct === 0)) ambOk = false;
+    if (!(STORM.thunder && !FIRE.thunder && !DESERT.thunder)) ambOk = false;
+    if (STORM.bpm <= FIRE.bpm || SEA.bpm >= ICE.bpm) ambOk = false;   // 雷暴最快、深海最慢
+    ambInfo.push(`bpm ${ICE.bpm}/${SEA.bpm}/${JUNGLE.bpm}/${DESERT.bpm}/${FIRE.bpm}/${STORM.bpm}`);
+  } catch (e) { ambOk = false; ambInfo.push('EX ' + e.message); }
+  ok('T22 每关环境天气层 + BGM 性格与关卡环境匹配', ambOk, ambInfo.join(' ｜ '));
+
+  // T23 天气层真的被绘制，且逐帧在运动
+  let animOk = true, animInfo = [];
+  try {
+    for (let i = 0; i < G.LEVELS.length; i++) {
+      G.start(i, { lives: 3 });
+      const a1 = G.ambientProbe(120), a2 = G.ambientProbe(160);
+      if (a1.n < 120 || a2.n < 120) animOk = false;          // 确实画出了粒子
+      if (a1.sig === a2.sig) animOk = false;                  // 位置/透明度确实在变
+      animInfo.push(`${G.THEMES[i].ambient.kind} 覆盖${a1.n}px`);
+    }
+  } catch (e) { animOk = false; animInfo.push('EX ' + e.message); }
+  ok('T23 天气层已绘制且逐帧运动（雪/火星/花粉/沙/气泡/雨）', animOk, animInfo.join(' ｜ '));
+
+  // T24 难度递进：关卡变长、深坑增多、总威胁度（敌+刺+平台）递增
+  let diffOk = true, diffInfo = [];
+  try {
+    const stats = G.LEVELS.map(L => {
+      const flat = L.rows.join('');
+      return {
+        w: L.w,
+        pits: (L.rows[16].match(/\./g) || []).length,
+        enemies: (flat.match(/G/g) || []).length,
+        spikes: (flat.match(/\^/g) || []).length,
+        movers: (flat.match(/[MV]/g) || []).length,
+        ceil: (flat.match(/F/g) || []).length,
+        hazard: 0
+      };
+    });
+    stats.forEach(s => { s.hazard = s.enemies + s.spikes + s.movers; });
+    for (let i = 1; i < stats.length; i++) {
+      const a = stats[i - 1], b = stats[i];
+      if (!(b.w > a.w)) diffOk = false;             // 关卡越来越长
+      if (!(b.pits > a.pits)) diffOk = false;       // 深坑越来越多
+      if (!(b.enemies > a.enemies)) diffOk = false; // 敌人越来越多
+      if (!(b.hazard > a.hazard)) diffOk = false;   // 总威胁度（敌+刺+平台）递增
+    }
+    diffInfo = stats.map(s => `${s.w}w/${s.pits}坑/${s.enemies}敌/${s.spikes}刺/${s.movers}台`);
+  } catch (e) { diffOk = false; diffInfo = ['EX ' + e.message]; }
+  ok('T24 关卡难度逐关递进（更宽/更多坑·敌·总威胁度）', diffOk, diffInfo.join(' ｜ '));
+
+  // T25 彩蛋：隐藏彩虹星可收集，且计入全局计数
+  let rbOk = false, rbInfo = '';
+  try {
+    G.game.rainbow = 0;
+    G.start(0, { lives: 3 });
+    const sc0 = G.game.score;
+    // 第一关彩虹星在 (20,1)，需翻转重力贴天花板
+    G.setPlayer({ x: 20 * TILE + 6, y: 64, gravity: -1, vy: 0, invuln: 0 });
+    G.advance(2);
+    rbOk = G.game.rainbow === 1 && G.game.score === sc0 + 1000 && G.game.player.rainbow > 0;
+    rbInfo = `rainbow=${G.game.rainbow}/${G.RAINBOW_TOTAL} score+${G.game.score - sc0} 拖尾帧=${G.game.player.rainbow}`;
+  } catch (e) { rbInfo = 'EX ' + e.message; }
+  ok('T25 彩蛋：隐藏彩虹星可收集（+1000 分、无敌、彩虹拖尾）', rbOk, rbInfo);
+
+  // T26 彩蛋：Konami 秘技 ↑↑↓↓←→←→BA
+  let konOk = false, konInfo = '';
+  try {
+    G.start(1, { lives: 3 });
+    const lv0 = G.game.lives, sc0 = G.game.score;
+    let triggered = false;
+    for (const c of G.KONAMI) triggered = G.feedKonami(c) || triggered;
+    konOk = triggered && G.game.lives === lv0 + 3 && G.game.score === sc0 + 3000 && G.game.player.rainbow > 0;
+    konInfo = `生命 ${lv0}→${G.game.lives} 得分 ${sc0}→${G.game.score}`;
+  } catch (e) { konInfo = 'EX ' + e.message; }
+  ok('T26 彩蛋：Konami 秘技触发（生命 +3 / 得分 +3000 / 彩虹拖尾）', konOk, konInfo);
+
+  // T20 过关 / 失败时停止 BGM
+  G.start(0, { lives: 3 });
+  const star20 = findStar();
+  G.setPlayer({ x: star20.x * TILE + 8, y: star20.y * TILE + 2, gravity: 1, vy: 0, invuln: 999 });
+  G.advance(4);
+  const stopOnClear = G.game.state === 'clear' && G.Music.current() === -1;
+  G.start(0, { lives: 1 });
+  G.setPlayer({ x: 19 * TILE + 6, y: 15 * TILE, gravity: 1, vy: 2, invuln: 0 });
+  G.advance(200);
+  const stopOnOver = G.game.state === 'gameover' && G.Music.current() === -1;
+  ok('T20 过关与失败时背景音乐停止', stopOnClear && stopOnOver,
+     `clear=${stopOnClear} gameover=${stopOnOver}`);
+
+  // T21 M 键开关音乐
+  G.start(1, { lives: 3 });
+  const on1 = G.Music.isOn();
+  G.Music.toggle();
+  const on2 = G.Music.isOn();
+  G.Music.toggle();
+  const on3 = G.Music.isOn();
+  ok('T21 可开关背景音乐且状态可恢复', on1 === true && on2 === false && on3 === true,
+     `${on1} → ${on2} → ${on3}`);
+
+  const pass = R.filter(r => r.pass).length;
+  window.__TEST_RESULT = { pass, fail: R.length - pass, total: R.length, results: R };
+  return window.__TEST_RESULT;
+}
+
+// ---------------- 启动 ----------------
+function boot() {
+  // 首屏必须先算一次画布尺寸，否则 canvas 会一直停在 HTML 里的 960×544，
+  // 在 1080p / 2K / 4K 上都只占屏幕一小块（表现为「画面非常小」）
+  resize();
+  // 首帧布局可能还没稳定（字体加载、工具栏收起等），再兜底校正两轮
+  requestAnimationFrame(() => { resize(); setTimeout(resize, 120); });
+
+  const params = new URLSearchParams(location.search);
+  if (params.get('test') === '1') {
+    game.manual = true;
+    const panel = document.getElementById('testPanel');
+    const out = document.getElementById('testOut');
+    panel.classList.remove('hidden');
+    let res;
+    try { res = runSelfTest(); }
+    catch (e) { res = { pass: 0, fail: 1, total: 1, results: [{ name: '自检崩溃', pass: false, info: e.message + '\n' + e.stack }] }; window.__TEST_RESULT = res; }
+    let html = `<h2>自检结果：${res.pass} / ${res.total} 通过${res.fail ? `（失败 ${res.fail}）` : ' ✅ 全部通过'}</h2>`;
+    res.results.forEach((r, i) => {
+      html += `<div class="${r.pass ? 'tp' : 'tf'}">[${r.pass ? 'PASS' : 'FAIL'}] ${String(i + 1).padStart(2, '0')} ${r.name}</div>`;
+      if (r.info) html += `<div class="ti">      ↳ ${r.info}</div>`;
+    });
+    out.innerHTML = html;
+    return;
+  }
+  game.player = makePlayer(64, 400);
+  game.theme = THEMES[0]; game.levelIdx = 0; game.intro = 0;
+  game.tiles = LEVELS[0].rows.map(r => r.split(''));
+  game.w = LEVELS[0].w; game.name = LEVELS[0].name;
+  showTitle();
+
+  // 快速预览最终结算画面（含双角色庆祝动画）：直接打开 xxx.html#win
+  if (location.hash === '#win') {
+    game.totalStars = LEVELS.length; game.rainbow = RAINBOW_TOTAL;
+    game.score = 35460; game.lives = 1;
+    setTimeout(() => { game.levelIdx = LEVELS.length - 1; clearLevel(); }, 200);
+  }
+
+  requestAnimationFrame(frame);
+}
+boot();
+
+})();
+</script>
+</body>
+</html>
