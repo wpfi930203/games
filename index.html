@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Games · 小游戏合集</title>
+<style>
+  :root { --neon: #37f5d8; --neon2: #ff5d8f; --bg: #0c0e16; --card: #151926; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #1b2236 0%, var(--bg) 60%);
+    color: #e8eefc; min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; padding: 48px 20px;
+  }
+  h1 { font-size: clamp(28px, 6vw, 44px); letter-spacing: 2px; margin-bottom: 6px;
+    background: linear-gradient(90deg, var(--neon), var(--neon2));
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { color: #8a93a8; margin-bottom: 36px; font-size: 14px; }
+  .grid { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    width: 100%; max-width: 720px; }
+  .card {
+    background: var(--card); border: 1px solid #232a3d; border-radius: 16px;
+    padding: 26px 22px; text-decoration: none; color: inherit; position: relative;
+    transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+    overflow: hidden;
+  }
+  .card::before { content: ""; position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(55,245,216,.08), rgba(255,93,143,.06));
+    opacity: 0; transition: opacity .18s ease; }
+  .card:hover { transform: translateY(-4px); border-color: var(--neon);
+    box-shadow: 0 12px 30px rgba(55,245,216,.15); }
+  .card:hover::before { opacity: 1; }
+  .card h2 { font-size: 20px; margin-bottom: 8px; }
+  .card p { color: #9aa3b8; font-size: 13px; line-height: 1.6; }
+  .tag { display: inline-block; margin-top: 14px; font-size: 12px; color: var(--neon);
+    border: 1px solid rgba(55,245,216,.35); border-radius: 999px; padding: 4px 12px; }
+  footer { margin-top: 40px; color: #5a6378; font-size: 12px; text-align: center; }
+  a.repo { color: #8a93a8; }
+</style>
+</head>
+<body>
+  <h1>🎮 GAMES</h1>
+  <div class="sub">纯前端单文件小游戏合集 · 双击即玩 · 无需安装</div>
+  <div class="grid">
+    <a class="card" href="neon-rush.html">
+      <h2>NEON-RUSH · 3D 霓虹赛车</h2>
+      <p>基于 Three.js + cannon-es 的第三人称 3D 赛车游戏：竞速 / 计时赛（幽灵车）/ 竞技场三种模式，含车辆物理、粒子特效、昼夜与天气系统。</p>
+      <span class="tag">▶ 立即游玩</span>
+    </a>
+    <a class="card" href="mario-galaxy-game.html">
+      <h2>超级马力欧银河大电影</h2>
+      <p>单文件 HTML5 Canvas 横版闯关游戏，含 6 个关卡、重力翻转机制与 WebAudio 合成音乐。</p>
+      <span class="tag">▶ 立即游玩</span>
+    </a>
+  </div>
+  <footer>
+    源码：<a class="repo" href="https://github.com/wpfi930203/games" target="_blank" rel="noopener">github.com/wpfi930203/games</a>
+    · MIT 精神随意取用
+  </footer>
+</body>
+</html>
